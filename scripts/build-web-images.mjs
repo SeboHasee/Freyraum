@@ -8,8 +8,9 @@
  *
  * For every imported artwork it writes WebP versions whose long edge is 640,
  * 1280, 2048 and min(source, 4096) px into `public/web-images/`, and appends
- * `window.__FREYRAUM_WEB_IMAGES = { <id>: [{ src, width, height }, …] }` to
- * `public/customer-artworks.js`. The runtime picks one size per device
+ * `window.__FREYRAUM_WEB_IMAGES = { <id>: [{ src, width, height }, …] }` and
+ * `window.__FREYRAUM_WEB_BACKGROUNDS = { "Backgrounds/<file>": "./web-images/…" }`
+ * (full-size copies of the hub/photo-room photos) to `public/customer-artworks.js`. The runtime picks one size per device
  * (`src/utils/artworkImageSources.ts`); without the map it uses the originals.
  *
  * Encoded files are cached in `node_modules/.cache/freyraum-web-images/`,
@@ -95,6 +96,45 @@ export async function buildWebImages({ root, log = () => {} }) {
     log(`web images: ${artwork.id} → ${variants.map((v) => Math.max(v.width, v.height)).join(', ')} px`);
   }
 
+  // v1.46 (B4): full-size WebP copies of the configured background photos
+  // (hub + photo rooms). Same pixel size, so calibration is unchanged; the
+  // editor keeps loading the originals.
+  const backgrounds = {};
+  const hubPath = join(root, 'customer-artworks', 'museum-hub.json');
+  if (existsSync(hubPath)) {
+    let hub = null;
+    try {
+      hub = JSON.parse(readFileSync(hubPath, 'utf8'));
+    } catch {
+      hub = null;
+    }
+    const sources = new Set();
+    if (typeof hub?.background?.src === 'string') sources.add(hub.background.src);
+    for (const view of Array.isArray(hub?.galleryRoomViews) ? hub.galleryRoomViews : []) {
+      if (typeof view?.background?.src === 'string') sources.add(view.background.src);
+    }
+    for (const src of sources) {
+      if (!/^Backgrounds\/[^/]+$/.test(src)) continue;
+      const sourcePath = join(publicDir, 'backgrounds', src.slice('Backgrounds/'.length));
+      if (!existsSync(sourcePath)) continue;
+      const bytes = readFileSync(sourcePath);
+      const meta = await sharp(bytes).metadata();
+      if (!meta.width || !meta.height) continue;
+      const hash = createHash('sha1').update(bytes).update(ENCODER_KEY).digest('hex').slice(0, 10);
+      const base = safeId(src.slice('Backgrounds/'.length).replace(/\.[^.]+$/, ''));
+      const name = `bg-${base}-${Math.max(meta.width, meta.height)}-${hash}.webp`;
+      const cachePath = join(cacheDir, name);
+      if (existsSync(cachePath)) {
+        cached += 1;
+      } else {
+        await sharp(bytes).webp({ quality: WEB_IMAGE_QUALITY, effort: 4, smartSubsample: true }).toFile(cachePath);
+        written += 1;
+      }
+      copyFileSync(cachePath, join(outDir, name));
+      backgrounds[src] = `./${WEB_IMAGE_DIR}/${name}`;
+    }
+  }
+
   // Drop cache entries that no current source/size uses.
   const used = new Set(readdirSync(outDir));
   for (const name of readdirSync(cacheDir)) {
@@ -103,8 +143,9 @@ export async function buildWebImages({ root, log = () => {} }) {
 
   appendFileSync(
     join(publicDir, 'customer-artworks.js'),
-    `window.__FREYRAUM_WEB_IMAGES = ${JSON.stringify(map)};\n`,
+    `window.__FREYRAUM_WEB_IMAGES = ${JSON.stringify(map)};\n` +
+      `window.__FREYRAUM_WEB_BACKGROUNDS = ${JSON.stringify(backgrounds)};\n`,
     'utf8'
   );
-  return { written, cached, artworks: Object.keys(map).length };
+  return { written, cached, artworks: Object.keys(map).length, backgrounds: Object.keys(backgrounds).length };
 }

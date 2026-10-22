@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -91,6 +91,19 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
+## v1.46 next development round (2026-10-22)
+
+- Done: B1 web manifest without image bytes, B2 WebP size variants
+  (`scripts/build-web-images.mjs`, runtime choice in
+  `src/utils/artworkImageSources.ts`), B3 lazy editor chunk + bundle budget,
+  C1 info-sheet stops, C2 photo-room swipe. Numbers: `FINDINGS.md` (v1.46).
+- Next in order: D1 split-layer raster, C3–C6, B4 (lazy hub artworks, WebP
+  backgrounds), D2–D5, E, F; G needs the customer. Checklist: `plan.md` →
+  "Next development round".
+- Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
+  WebP variants; without sharp the site falls back to the originals with a
+  `validate:deploy` warning. The customer's "Update Gallery" does not run it.
+
 ## Next-agent starting point (v1.41–v1.45, 2026-10-22)
 
 - Same branch/PR #27 (`copilot/mobile-view-optimizations`); `main` holds
@@ -172,17 +185,19 @@ lists (details in `CHANGELOG.md`):
   bundle/room/camera state; current local artifacts do not clip.
 - Software-Chrome visual harness stops at the runtime invariant
   `shadow-casting light count 1 != expected 2`; no Type A capture is claimed.
-- Fraktal source decodes to ~97 MB on the GPU; build keeps classic-script and
-  large-chunk warnings; 17 development-tool dependency advisories (0 production).
+- Fraktal now uses a 4096 px (desktop, ~67 MB GPU) or 2048 px (phone,
+  ~17 MB) WebP on the deployed site; the local `file://` preview still uses
+  the original. The build keeps the large-chunk warning (three.js; entry
+  budget 1.15 MB in `test:frame-budget`); 17 development-tool dependency
+  advisories (0 production).
 
 ### Ready-to-pick follow-ups (small, scoped)
 
-- Bottom-sheet snap points (peek / half / full) via `pickSnapTarget`.
 - Timeline auto-hide with the rest of the phone chrome; refit via
   `galleryManager.handleViewportMetricsChanged()`.
 - Short-landscape phone side rail instead of top/bottom bars.
-- Photo room on phones: swipe between rooms with the shared snapping model;
-  optional background parallax driven by the same tilt.
+- Photo room on phones: optional background parallax driven by the tilt
+  (the room swipe is done, v1.46).
 - A flick assertion in the photo-room browser suite (fast drag → glide →
   spring-back inside the photo).
 - Split the photo-room browser suite per viewport for parallel CI jobs.
@@ -196,8 +211,8 @@ lists (details in `CHANGELOG.md`):
   photo in during an edge pull; deep links to an artwork.
 - Gallery: long-press for artwork details; share sheet (`navigator.share`).
 - PWA: manifest + offline cache of the published artworks.
-- Phone performance: responsive AVIF/WebP derivatives, lazy decode for
-  off-screen hub artworks, editor split out of the visitor bundle.
+- Phone performance: lazy decode for off-screen hub artworks and WebP room
+  photos (artwork derivatives and the editor split are done, v1.46).
 - Accessibility: larger-text layout checks; "reduce chrome" toggle.
 - Content: audio guide per artwork, curator-chosen exhibitions, visitor-facing
   metadata sheets.

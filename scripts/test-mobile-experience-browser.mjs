@@ -500,6 +500,38 @@ try {
     await dragY(handle.x, handle.y, handle.y + 90);
     await waitFor("!document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
     console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, then steps half → peek → away`);
+
+    // v1.46 (C2): at the fitted zoom a horizontal swipe changes the photo room.
+    await evaluate("document.querySelector('.topbar__room-view-btn').click()");
+    await waitFor("!document.querySelector('.gallery-room-view').hidden", 10_000);
+    const roomState = () => evaluate(`(() => {
+      const select = document.querySelector('.gallery-room-view__select');
+      const scene = document.querySelector('.gallery-room-view__scene');
+      return { index: select.selectedIndex, count: select.options.length, transform: getComputedStyle(scene).transform };
+    })()`);
+    const roomSettled = async (index) => {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        const state = await roomState();
+        if (state.index === index && (state.transform === 'none' || state.transform === 'matrix(1, 0, 0, 1, 0, 0)')) return state;
+        await delay(200);
+      }
+      throw new Error(`${viewport.name}: photo room did not settle on room ${index} (${JSON.stringify(await roomState())})`);
+    };
+    const startRoom = await roomState();
+    assert.ok(startRoom.count >= 2, `${viewport.name}: several photo rooms are configured`);
+    const swipeY = viewport.height * 0.45;
+    await drag(viewport.width * 0.8, viewport.width * 0.2, swipeY);
+    await roomSettled(startRoom.index + 1);
+    await drag(viewport.width * 0.2, viewport.width * 0.8, swipeY);
+    await roomSettled(startRoom.index);
+    // The first room has no left neighbour: the swipe springs back.
+    await evaluate("(() => { const s = document.querySelector('.gallery-room-view__select'); s.selectedIndex = 0; s.dispatchEvent(new Event('change')); })()");
+    await roomSettled(0);
+    await drag(viewport.width * 0.2, viewport.width * 0.8, swipeY);
+    await roomSettled(0);
+    await evaluate("document.querySelector('.gallery-room-view__back')?.click()");
+    console.log(`✓ ${viewport.name}: photo-room swipe changes rooms and springs back at the first room`);
   }
   console.log('PASS: mobile hub panorama, strip, drag safety, theme-color, phone chrome coverage, phone menu and info sheet.');
 } finally {

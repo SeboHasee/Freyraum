@@ -94,6 +94,7 @@ import {
   type ArtworkImageSourceCandidate,
 } from '../utils/artworkImageSources';
 import { loadHubImageAsset } from './hubAssetLoader';
+import { webBackgroundUrl } from '../utils/webBackgrounds';
 import type { HubRoomRenderer, HubArtworkPresentationKind, SlotUpsertResult } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
 import {
@@ -431,7 +432,10 @@ export class MainMuseumHub {
     image.decoding = 'async';
     image.draggable = false;
     image.style.objectFit = resolution.background.fit ?? 'contain';
-    const primaryBackgroundUrl = resolveBackgroundUrl(resolution.background.src);
+    // v1.46 (B4): visitors get the deployed WebP copy; the editor keeps the original.
+    const primaryBackgroundUrl =
+      (!this.calibrating && webBackgroundUrl(resolution.background.src)) ||
+      resolveBackgroundUrl(resolution.background.src);
     const fallbackBackgroundUrl = resolveBackgroundUrl(resolution.backgroundFallback.src);
     const backgroundReady = loadHubImageAsset({
       image,

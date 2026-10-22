@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -140,7 +140,10 @@ both file entries.
   projection and placement math are unchanged.
 - `src/utils/`
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
-    plan used by both gallery and hub
+    plan used by both gallery and hub; since v1.46 also the deployed WebP
+    size choice (`applyWebImages`: one display size per device, smallest for
+    thumbnails) from `window.__FREYRAUM_WEB_IMAGES`
+    (`scripts/build-web-images.mjs`)
   - `sourceToPixelOutcome.ts`: redacted route-aware outcome diagnostics;
     optional `presentationPath` distinguishes `'dom'` from `'webgl'`. Hub DOM
     outcomes retain native decoded dimensions with null GPU/probe fields and
@@ -162,7 +165,9 @@ both file entries.
 
 ## Editor modules, saving and desktop app (v1.35–v1.40)
 
-- `src/hub/editor/`: editor UI split out of `MainMuseumHub` — tabs
+- `src/hub/editor/`: editor UI split out of `MainMuseumHub` (v1.46: the
+  classes reach the hub through the lazily imported `editorModules.ts`
+  chunk; `MainMuseumHub` keeps type-only imports) — tabs
   (`editorTabs`), texts/labels (`editorText`), toast, room bar (`roomBar`),
   artwork library and thumbnails (`artworkLibrary`, `thumbnails` →
   `thumbnailKey()`), placement drag/keyboard (`placementController`), and the

@@ -1,10 +1,39 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-22.md` (v1.41–v1.44 and 2026-10-18…20),
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Next development round (v1.46, 2026-10-22)
+
+Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F → G.
+
+- [ ] A Owner gates: approve CI on PR #27 and merge; live `/Freyraum/` check
+      (`docs/DEPLOYMENT.md`); real-phone and real-GPU desktop pass.
+- [x] B1 Deployed manifest without embedded image bytes (70.8 MB → 19 KB);
+      `validate:deploy` budget (2 MiB, no `webglImage`/`data:image/`).
+- [x] B2 WebP size variants (640/1280/2048/≤4096) built by
+      `scripts/build-web-images.mjs` during `import:artworks` sync; one
+      display size per device (phones/≤4 GB: 2048) and the smallest for
+      timeline thumbnails; same-origin textures reuse the image cache.
+- [x] B3 Placement-editor UI is a lazy chunk (`src/hub/editor/editorModules.ts`,
+      74 KB); visitor bundle budget in `test:frame-budget`.
+- [x] C1 Info sheet peek/half/full stops (`resolveSheetStop` →
+      `pickSnapTarget`); `overscroll-behavior: contain`.
+- [x] C2 Photo-room touch swipe between rooms at the fitted zoom (gallery
+      swipe rule; dropdown stays); neighbour photos preloaded.
+- [ ] D1 Split-layer raster (target: fewer double-click redraws than 41/31).
+- [ ] C3 landscape side rail; C4 timeline auto-hide; C5 hub pinch + edge
+      preview; C6 remaining flick test in the photo-room suite.
+- [ ] B4 Lazy hub artwork loading; background photos as WebP (now the largest
+      remaining download, ~15 MB of ~19 MB per visit).
+- [ ] D2 per-frame repaint; D3 zoom indicator; D4 pointer-anchored wheel
+      modifier; D5 gallery reset drift.
+- [ ] E (200 % text, reduce chrome, deep links, device overlay, shadow-light
+      harness stop), F (CI split, baselines, Lighthouse, dev-tool upgrades),
+      G (content; needs the customer).
 
 ## Handoff implementation (v1.45, 2026-10-22)
 
@@ -93,8 +122,12 @@ Consolidated from the archived plans; one entry per gate.
 
 ## Open — high-resolution asset delivery beyond GitHub upload limits (2026-07-07)
 
-> **Phase: Planning/docs only.** No importer, runtime, or deployment behavior
-> changed in this pass.
+> **Status (v1.46):** Phase 2 is done for the deployed site — the web
+> manifest no longer embeds `webglImage` (local `file://` keeps it) and the
+> runtime loads WebP derivatives. Phase 3's manifest budget is in
+> `validate:deploy`. Still open: originals are still copied to `dist/images/`
+> (fallback only), so Phases 1 and 4 (masters outside Git, >25 MiB uploads)
+> remain.
 
 ### Problem summary
 

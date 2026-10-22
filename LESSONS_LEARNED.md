@@ -1,5 +1,29 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+
+## 2026-10-22 — Download size lessons
+
+### Lesson 136 — `npm i <pkg>` removes packages installed with `--no-save`
+
+Adding sharp with `npm i -D` pruned the Playwright copy that had been
+installed with `npm i --no-save playwright`, and every browser probe failed
+with "Cannot find module". After any dependency change, reinstall the
+unsaved test tools before running browser suites.
+
+### Lesson 135 — A fixed count in a test is a copy of customer data
+
+`test:editor-rooms` asserted exactly 2 photo rooms; v1.42 configured 4 and the
+check failed for months behind other failures. Read counts from the loaded
+configuration (or the editor export) instead of restating them (see lesson 128).
+
+### Lesson 134 — The local preview build copies `public/` over its output
+
+The Vite local build (`customer-preview/`, `emptyOutDir`) also copies
+`public/`. Once the web manifest without embedded images went to `public/`,
+the build would have replaced the `file://` manifest with it and broken the
+offline preview. Keep the two manifests separate and preserve the local one
+across the build (`keepLocalPreviewManifests` in `vite.local.config.ts`);
+measure what the deployed artifact actually contains before optimizing.
 
 ## 2026-10-21 — Mobile interaction lessons
 

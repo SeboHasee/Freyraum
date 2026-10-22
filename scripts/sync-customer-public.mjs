@@ -173,7 +173,7 @@ if ('skipped' in webImages) {
   process.stdout.write(`sync-customer-public: web images skipped — ${webImages.skipped}\n`);
 } else {
   process.stdout.write(
-    `sync-customer-public: web images for ${webImages.artworks} artwork(s) (${webImages.written} encoded, ${webImages.cached} cached)\n`,
+    `sync-customer-public: web images for ${webImages.artworks} artwork(s) and ${webImages.backgrounds} background(s) (${webImages.written} encoded, ${webImages.cached} cached)\n`,
   );
 }
 

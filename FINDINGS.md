@@ -1,5 +1,39 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+
+## 2026-10-22 — v1.46 download size and phone feel
+
+- **The deployed site shipped every original twice.** `customer-artworks.js`
+  embedded each original as base64 `webglImage` (+33 %) for the `file://`
+  preview, and the same file went to Pages: 70,775,176 bytes before the first
+  artwork. The local preview build also copied `public/` over
+  `customer-preview/`, so a web-only manifest would have broken `file://`
+  (lesson 134).
+- **Each image was downloaded about three times.** The hub `<img>`, the
+  timeline thumbnail (full original) and the gallery texture loaded the same
+  URL; the texture used `crossOrigin="anonymous"` for any `http(s)` URL, which
+  is a separate cache entry. Fraktal (26 MB PNG) cost 78 MB per visit.
+- **Before/after** (local production build at `/Freyraum/`, headless Chrome,
+  SwiftShader; bytes = response bodies until the gallery shows Fraktal):
+
+  | Measure | Before | B1 | B1+B2 |
+  |---|---|---|---|
+  | `customer-artworks.js` | 70,775,176 B | 19,057 B | 20,254 B |
+  | Bytes per visit, desktop 1280×800 | 237.5 MB | 166.7 MB | 19.9 MB |
+  | Bytes per visit, phone 390×844 @3× | — | — | 18.6 MB |
+  | Artwork image bytes per visit | ~147 MB | ~147 MB | 4.4 MB desktop / 3.2 MB phone |
+  | Fraktal texture (GPU, mip incl.) | ~97 MB | ~97 MB | ~67 MB desktop / ~17 MB phone |
+  | Start button enabled (localhost) | ~31 s | ~31 s | ~33 s desktop / ~20 s phone |
+
+  Start-button time is dominated by SwiftShader GPU work and the minimum
+  loading screen, not bytes; on a real network the byte drop is what
+  visitors feel. The remaining ~15 MB are the hub/room background photos
+  (B4 follow-up).
+- **Editor split:** the visitor entry chunk went from 1,141,602 to
+  1,068,800 bytes; the editor UI is a 74 KB chunk. three.js keeps the entry
+  above Vite's 500 KB warning, so the warning stays; the budget is 1.15 MB.
+- **Stale test found:** `test:editor-rooms` still expected 2 photo rooms
+  after v1.42 configured 4; it now reads the count from the export.
 
 ## 2026-10-22 — v1.45 handoff implementation findings
 

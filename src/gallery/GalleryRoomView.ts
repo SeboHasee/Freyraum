@@ -2,6 +2,7 @@ import type { Artwork } from '../config/artworks';
 import type { GalleryRoomView as GalleryRoomViewConfig } from '../config/museumHub';
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { smoothDamp } from '../utils/math';
+import { webBackgroundUrl } from '../utils/webBackgrounds';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 import {
   DoubleTapDetector,
@@ -9,6 +10,7 @@ import {
   isMotionReduced,
   MIN_FLING_VELOCITY,
   normalizeWheelDelta,
+  resolveSwipeDirection,
   rubberBandClamp,
   stepMomentum,
   VelocityTracker,
@@ -69,6 +71,8 @@ type CameraGesture =
     };
 
 function resolveBackgroundUrl(src: string): string {
+  const web = webBackgroundUrl(src);
+  if (web) return new URL(web, window.location.href).href;
   const filename = src.replace(/^Backgrounds\//, '');
   return new URL(`${import.meta.env.BASE_URL}backgrounds/${filename}`, window.location.href).href;
 }
@@ -128,6 +132,7 @@ export class GalleryRoomView {
   private motionModeObserver: MutationObserver | null = null;
   private gesture: CameraGesture | null = null;
   private pointerDragStarted = false;
+  private readonly preloadedBackgrounds = new Map<string, HTMLImageElement>();
   private readonly velocity = new VelocityTracker();
   private readonly doubleTap = new DoubleTapDetector();
   private momentumFrame = 0;
@@ -377,6 +382,7 @@ export class GalleryRoomView {
       this.status.textContent = '';
       this.resetCamera();
       this.updateArtworkTransform();
+      this.preloadNeighborBackgrounds();
       this.closeButton.focus({ preventScroll: true });
     } else {
       this.pointers.clear();
@@ -862,6 +868,22 @@ export class GalleryRoomView {
       const slop = event.pointerType === 'mouse' ? 0 : undefined;
       this.pointerDragStarted ||= exceedsTapSlop(point.x - this.gesture.startX, point.y - this.gesture.startY, slop);
       if (!this.pointerDragStarted) return;
+      if (this.isRoomSwipeAvailable(event.pointerType)) {
+        // v1.46 (C2): at the fitted zoom a touch drag carries the whole room;
+        // toward a missing neighbour (first/last room) it rubber-bands.
+        const dx = point.x - this.gesture.startX;
+        const followX = this.neighborView(dx < 0 ? 1 : -1)
+          ? dx
+          : rubberBandClamp(dx, 0, 0, this.element.clientWidth);
+        this.setCamera(
+          this.cameraScale,
+          followX,
+          rubberBandClamp(point.y - this.gesture.startY, 0, 0, this.element.clientHeight),
+          true,
+          true
+        );
+        return;
+      }
       // Content follows the finger 1:1; past the photo edge it rubber-bands.
       const { maxX, maxY } = this.panLimits();
       this.setCamera(
@@ -915,7 +937,10 @@ export class GalleryRoomView {
         this.startPanMomentum(0, 0);
       }
     } else if (gesture?.kind === 'pan' && event.type === 'pointerup') {
-      if (dragged) {
+      if (dragged && this.isRoomSwipeAvailable(event.pointerType)) {
+        const velocity = this.velocity.velocity(event.timeStamp);
+        this.finishRoomSwipe(endPoint.x - gesture.startX, endPoint.y - gesture.startY, velocity.x);
+      } else if (dragged) {
         const velocity = this.velocity.velocity(event.timeStamp);
         this.startPanMomentum(velocity.x, velocity.y);
       } else if (event.pointerType !== 'mouse' && this.doubleTap.tap(event.timeStamp, endPoint.x, endPoint.y)) {
@@ -926,6 +951,52 @@ export class GalleryRoomView {
     }
     this.beginGesture();
   };
+
+  /**
+   * v1.46 (C2): phones and tablets swipe between photo rooms at the fitted
+   * zoom with the gallery's swipe rule; the dropdown stays for desktop and
+   * screen readers. Zoomed in, a drag pans the photo instead.
+   */
+  private isRoomSwipeAvailable(pointerType: string): boolean {
+    return pointerType === 'touch'
+      && this.views.length > 1
+      && Math.max(this.cameraScale, this.cameraAnimationTargetScale ?? MIN_CAMERA_SCALE) <= MIN_CAMERA_SCALE + 0.001;
+  }
+
+  private neighborView(direction: -1 | 1): GalleryRoomViewConfig | null {
+    const index = this.activeView ? this.views.indexOf(this.activeView) : -1;
+    if (index < 0) return null;
+    return this.views[index + direction] ?? null;
+  }
+
+  private finishRoomSwipe(dx: number, dy: number, velocityX: number): void {
+    const direction = resolveSwipeDirection(dx, dy, velocityX);
+    const next = direction === 0 ? null : this.neighborView(direction);
+    if (!next) {
+      this.startPanMomentum(0, 0); // springs back to the fitted room
+      return;
+    }
+    // The next room enters from the side the finger pulled it from and
+    // glides to rest with the shared camera easing (composite-only).
+    const width = this.viewportSize().width;
+    this.setCamera(MIN_CAMERA_SCALE, this.cameraOffsetX + direction * width, 0, true, true);
+    this.setView(next.id);
+    this.preloadNeighborBackgrounds();
+  }
+
+  /** Warms the neighbouring room photos so a swipe does not reveal a blank room. */
+  private preloadNeighborBackgrounds(): void {
+    for (const direction of [-1, 1] as const) {
+      const view = this.neighborView(direction);
+      if (!view) continue;
+      const src = resolveBackgroundUrl(view.background.src);
+      if (this.preloadedBackgrounds.has(src)) continue;
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = src;
+      this.preloadedBackgrounds.set(src, image);
+    }
+  }
 
   private beginGesture(): void {
     const entries = [...this.pointers.entries()];

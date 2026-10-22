@@ -1,5 +1,36 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+
+## Unreleased — v1.46 next development round (2026-10-22)
+
+- **Smaller deployed download:** `public/customer-artworks.js` no longer
+  carries base64 copies of every original (70.8 MB → 19 KB). The local
+  `file://` preview keeps its embedded fallback
+  (`customer-preview/customer-artworks.js`); the deployed site loads files.
+  `validate:deploy` fails above 2 MiB or on embedded image bytes.
+- **Responsive images:** `import:artworks` (npm/CI) writes WebP versions at
+  640/1280/2048/≤4096 px into `public/web-images/` (sharp, cached in
+  `node_modules/.cache`). Phones and devices with ≤4 GB memory use 2048 px,
+  others up to 4096 px; the timeline uses the 640 px version. Hub, gallery
+  and photo room share one URL, so each image downloads once (same-origin
+  textures no longer use a separate CORS request). Per visit: 166.7 MB →
+  19.9 MB (desktop) / 18.6 MB (phone). The customer's "Update Gallery"
+  (plain Node) is unchanged.
+- **Editor out of the visitor bundle:** the placement-editor UI classes load
+  as a separate chunk only when the editor opens (74 KB less for visitors).
+  `test:frame-budget` now also enforces a visitor entry budget and checks
+  that editor-only code stays out of it.
+- **Phone info sheet:** three stops — peek (title only), half (default) and
+  full — using the shared snap physics; scrolling inside the sheet no longer
+  moves the page.
+- **Photo room on phones:** swipe left/right at the fitted zoom to change
+  rooms (the next room glides in; the first/last room springs back). The
+  room dropdown stays for desktop and screen readers.
+- **Tests:** `test:mobile-browser` covers the sheet stops and the room swipe;
+  `test:touch-gestures` covers `resolveSheetStop`; `test:validate-deploy`
+  covers the manifest budget and web-image files (15 checks);
+  `test:editor-rooms` now reads the configured photo-room count (it still
+  expected 2 of the 4 rooms).
 
 ## Unreleased — v1.45 handoff implementation (2026-10-22)
 

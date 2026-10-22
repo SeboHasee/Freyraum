@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,19 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Download size and bundle budgets (added 2026-10-22, v1.46)
+
+- `npm run validate:deploy` (deploy workflow, before the build): fails when
+  `public/customer-artworks.js` is over 2 MiB or embeds image bytes
+  (`webglImage`, `data:image/`), or when a listed `web-images/*.webp` file is
+  missing; warns when the web image map is absent (sharp not installed).
+  Fixture tests: `npm run test:validate-deploy`.
+- `npm run test:frame-budget` (CI, after `npm run build`): the visitor entry
+  chunk `dist/assets/main-*.js` must stay ≤ 1.15 MB, an `editorModules-*.js`
+  chunk must exist, and editor-only class names must not appear in the entry.
+- Byte measurements per visit are manual (served `dist/` at `/Freyraum/`,
+  Playwright `request.sizes()`); record before/after in `FINDINGS.md`.
 
 ## Zoom work measurement (added 2026-10-22, v1.45)
 
@@ -30,7 +43,10 @@ non-overlapping controls, the phone "more" menu (44 px targets, settings on
 screen, outside-tap close) and the info sheet (visible on touch, expand,
 pinned past auto-hide, collapse, swipe away). Since v1.45 it also checks the
 strip announcement ("Bild N von N") and polls strip reach until the glide has
-arrived (lesson 132). About 5–10 min headless; run
+arrived (lesson 132). Since v1.46 the 390×844 pass checks the info-sheet stops
+(full → half → peek → away, peek smaller than half with the title visible,
+`overscroll-behavior: contain`) and the photo-room swipe (next room, back, and
+spring-back at the first room). About 5–10 min headless; run
 it alone. Real-device feel is still manual.
 
 ## Mobile touch, gyro and hub panorama (added 2026-10-21)

@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 ## Current context (v1.42)
 
@@ -28,6 +28,11 @@
   (v1.42): utilities sit in `src/ui/PhoneUtilityMenu.ts` (placed by
   `placeUtilityControls` in `main.ts`); the compact info panel is a bottom sheet. Pure tests:
   `npm run test:touch-gestures`. Real-device acceptance is open (`docs/HANDOFF.md`).
+- Download size (v1.46): the deployed manifest has no embedded image bytes
+  and lists WebP size variants (`scripts/build-web-images.mjs`, budget in
+  `validate:deploy`); the editor UI is a lazy chunk (`src/hub/editor/editorModules.ts`,
+  entry budget in `test:frame-budget`). Keep editor classes out of static
+  imports in `MainMuseumHub`.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.

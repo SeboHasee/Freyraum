@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -157,6 +157,10 @@ customer visual acceptance.
   `file://` museum-hub preview may prefer embedded `webglImage` data when the
   declared customer image resolves to a local file URL that is less reliable
   for WebGL upload.
+- v1.46: the deployed site gets `public/customer-artworks.js` without
+  embedded `webglImage` copies plus WebP size variants in `web-images/`
+  (built during `npm run import:artworks` when sharp is installed); the local
+  `customer-preview/customer-artworks.js` keeps the embedded fallback.
 - Generated `customer-artworks.js` now also publishes
   `window.__FREYRAUM_ARTWORK_BUNDLE__` with a script-derived `assetBaseUrl`,
   so the same imported customer image bundle resolves consistently in the local

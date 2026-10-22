@@ -161,6 +161,15 @@ test('deployed manifest without web image variants warns', () => {
   assert.ok(result.warnings.some((warning) => warning.includes('no web image variants')), result.warnings.join('\n'));
 });
 
+test('missing web background file fails', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n' + WEB_MAP +
+      'window.__FREYRAUM_WEB_BACKGROUNDS = {"Backgrounds/museum-empty.png":"./web-images/bg-museum-empty-64-abc123.webp"};\n',
+    webImageFiles: ['akt-27-640-abc123.webp'],
+  }));
+  assert.ok(result.errors.some((error) => error.includes('bg-museum-empty-64-abc123.webp')), result.errors.join('\n'));
+});
+
 test('missing web image variant file fails', () => {
   const result = validateDeploy(fixture({
     deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n' + WEB_MAP,

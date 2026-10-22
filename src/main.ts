@@ -47,6 +47,7 @@ import {
   sanitizeWebImageMap,
   webImageDisplayLongEdge,
 } from './utils/artworkImageSources';
+import { setWebBackgroundMap } from './utils/webBackgrounds';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 import {
@@ -875,9 +876,13 @@ async function main(): Promise<void> {
   const customerArtworks = injectedArtworkPayload
     ? applyWebImages(injectedArtworkPayload.artworks, webImageMap, webImageLongEdge)
     : null;
-  if (webImageMap.size > 0) {
+  const webBackgroundCount = setWebBackgroundMap(
+    (window as unknown as { __FREYRAUM_WEB_BACKGROUNDS?: unknown }).__FREYRAUM_WEB_BACKGROUNDS
+  );
+  if (webImageMap.size > 0 || webBackgroundCount > 0) {
     diagnostics.info('boot', 'artworks-web-images', 'Using deployed web image variants', {
       artworks: webImageMap.size,
+      backgrounds: webBackgroundCount,
       displayLongEdge: webImageLongEdge,
     });
   }

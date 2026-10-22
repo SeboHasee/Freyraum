@@ -159,30 +159,40 @@ export function validateDeploy(root) {
           'embedded copies belong only in the local preview (customer-preview/customer-artworks.js).'
       );
     }
-    // v1.46 (B2): every listed WebP variant must exist; without the map the
+    // v1.46 (B2/B4): every listed WebP file must exist; without the maps the
     // site falls back to the originals (warning only).
-    const webImagesMatch = /window\.__FREYRAUM_WEB_IMAGES = (\{.*\});\s*$/m.exec(readFileSync(deployManifestPath, 'utf8'));
-    if (!webImagesMatch) {
+    const deployManifestText = readFileSync(deployManifestPath, 'utf8');
+    const readMap = (name) => {
+      const match = new RegExp(`^window\\.${name} = (\\{.*\\});\\s*$`, 'm').exec(deployManifestText);
+      if (!match) return null;
+      try {
+        return JSON.parse(match[1]);
+      } catch {
+        issues.errors.push(`public/customer-artworks.js: ${name} is not valid JSON.`);
+        return {};
+      }
+    };
+    const webImages = readMap('__FREYRAUM_WEB_IMAGES');
+    if (!webImages) {
       issues.warnings.push(
         'public/customer-artworks.js has no web image variants; visitors download the full original images. ' +
           'Run `npm ci` (installs sharp) and `npm run import:artworks`.'
       );
-    } else {
-      let webImages = null;
-      try {
-        webImages = JSON.parse(webImagesMatch[1]);
-      } catch {
-        issues.errors.push('public/customer-artworks.js: the web image map is not valid JSON.');
+    }
+    const listed = [];
+    for (const [id, variants] of Object.entries(webImages ?? {})) {
+      for (const variant of Array.isArray(variants) ? variants : []) {
+        listed.push({ owner: id, src: typeof variant?.src === 'string' ? variant.src : '' });
       }
-      for (const [id, variants] of Object.entries(webImages ?? {})) {
-        for (const variant of Array.isArray(variants) ? variants : []) {
-          const src = typeof variant?.src === 'string' ? variant.src : '';
-          if (!/^\.\/web-images\/[A-Za-z0-9_-]+-\d+-[0-9a-f]+\.webp$/.test(src)) {
-            issues.errors.push(`web images: "${id}" lists an invalid path "${src}".`);
-          } else if (!existsSync(join(root, 'public', src.slice(2)))) {
-            issues.errors.push(`web images: public/${src.slice(2)} for "${id}" is missing. Re-run \`npm run import:artworks\`.`);
-          }
-        }
+    }
+    for (const [key, src] of Object.entries(readMap('__FREYRAUM_WEB_BACKGROUNDS') ?? {})) {
+      listed.push({ owner: key, src: typeof src === 'string' ? src : '' });
+    }
+    for (const { owner, src } of listed) {
+      if (!/^\.\/web-images\/[A-Za-z0-9_-]+-\d+-[0-9a-f]+\.webp$/.test(src)) {
+        issues.errors.push(`web images: "${owner}" lists an invalid path "${src}".`);
+      } else if (!existsSync(join(root, 'public', src.slice(2)))) {
+        issues.errors.push(`web images: public/${src.slice(2)} for "${owner}" is missing. Re-run \`npm run import:artworks\`.`);
       }
     }
   }
