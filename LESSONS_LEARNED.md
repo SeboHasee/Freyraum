@@ -1,7 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 ## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 132 — "Stopped moving" is not "arrived" under a starved renderer
+
+A browser test treated four equal pan reads over ~1 s as settled; headless
+SwiftShader can pause rAF that long mid-glide, so the check sometimes measured
+a half-finished glide and reported a side-wall artwork as off screen. Poll the
+asserted end state with a deadline, and print the measured bounds in the
+failure message so a flake can be told apart from a geometry bug at once.
 
 ### Lesson 131 — Ease a camera as one transform, not per component
 

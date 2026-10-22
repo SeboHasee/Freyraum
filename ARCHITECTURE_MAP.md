@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.

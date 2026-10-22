@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.

@@ -1,5 +1,48 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+
+## 2026-10-22 — v1.45 handoff implementation findings
+
+- **Phone strip failure was test timing, not geometry.** The v1.44 failure
+  ("room-01.wall-left.a is fully on screen after its strip tap") did not
+  reproduce on rerun with diagnostics; all strip entries framed their artwork
+  at 390×844 and 360×780. The helper `waitForPanSettled` accepted four equal
+  reads over ~1 s as "settled", which SwiftShader rAF starvation can produce
+  mid-glide. Geometrically, `panoramaPanForFraction` frames any artwork that
+  lies inside the photo and is narrower than the screen (edge clamping only
+  happens when the photo edge is already on screen); a pure sweep now proves
+  it at 360–430 px widths.
+- **Zoom per step differed by design.** Gallery wheel: `z += 0.0045·dy`
+  (additive camera distance) → magnification per notch grows as `z` shrinks
+  (≈7 % at fit z≈7, ≈29 % at z≈2). Gallery buttons/keys: `z ± 0.6` (≈9 % at
+  fit, ≈43 % close). Room: ×1.105 per notch, ×1.25 per button. Now both use
+  one multiplicative curve.
+- **Baseline, `npm run measure:room-zoom`** (headless Chrome 155, SwiftShader,
+  1440×900; counts per scenario, durations inflated by rAF starvation):
+
+  | scenario | raster | paint | decode | style | layout |
+  |---|---|---|---|---|---|
+  | gallery wheel in ×6 | 29 | 106 | 4 | 24 | 2 |
+  | gallery wheel out ×6 | 0 | 95 | 0 | 19 | 0 |
+  | gallery double-click in | 3 | 6 | 0 | 3 | 2 |
+  | gallery double-click out | 5 | 17 | 0 | 6 | 2 |
+  | room wheel in ×6 | 8 | 83 | 0 | 38 | 1 |
+  | room wheel out ×6 | 0 | 150 | 0 | 66 | 0 |
+  | room button in ×3 | 0 | 60 | 0 | 24 | 0 |
+  | room reset | 1 | 121 | 0 | 48 | 1 |
+  | room double-click in | 41 | 136 | 3 | 57 | 1 |
+  | room double-click out | 31 | 131 | 0 | 52 | 1 |
+
+  Layout stays at ≤ 1 per room zoom (v1.44 viewport cache). Raster work is
+  low for wheel/button zooms; the double-click scenarios raster most (41/31),
+  i.e. promoting at 1× and re-rastering at 2.5× after settle. The room still
+  issues one main-thread `Paint` and ~0.4 style recalcs per frame (gallery:
+  WebGL, far fewer) — next suspects: the per-frame `syncPanCursor` class
+  toggles and the timeline/controls sharing the scene's paint layer.
+- **Not done in v1.45 (open):** split-layer raster (plan 1.2) — the numbers
+  above say double-click is the case to target; a gallery-reset drift check
+  (1.4); zoom-level indicator (1.5); phases 2.1–2.5, 3, 4, 5 of the handoff
+  plan (tracked in `plan.md`).
 
 ## 2026-10-21 — v1.44 photo-room zoom-out drift findings
 

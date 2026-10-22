@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,15 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Zoom work measurement (added 2026-10-22, v1.45)
+
+After `npm run build`: `FREYRAUM_CHROME_PATH=/path/to/chrome npm run measure:room-zoom`
+(optional `FREYRAUM_MEASURE_URL`, `FREYRAUM_MEASURE_JSON`). Traces raster,
+paint, image decode, style recalculation and layout for wheel (×6 in/out),
+button, reset and double-click zooms in the gallery and the photo room and
+prints a table. It measures work, not frame rate (lesson 130); compare runs on
+the same machine. It does not assert; record before/after in `FINDINGS.md`.
 
 ## Phone browser suite (added 2026-10-21, v1.42)
 
@@ -19,7 +28,9 @@ gliding its artwork fully on screen and tappable at its centre, finger drags
 panning without opening, gallery chrome ≤ 24 % of the height with
 non-overlapping controls, the phone "more" menu (44 px targets, settings on
 screen, outside-tap close) and the info sheet (visible on touch, expand,
-pinned past auto-hide, collapse, swipe away). About 5–10 min headless; run
+pinned past auto-hide, collapse, swipe away). Since v1.45 it also checks the
+strip announcement ("Bild N von N") and polls strip reach until the glide has
+arrived (lesson 132). About 5–10 min headless; run
 it alone. Real-device feel is still manual.
 
 ## Mobile touch, gyro and hub panorama (added 2026-10-21)
@@ -367,7 +378,8 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
-| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math, device-tilt normalisation, info-sheet release | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve | – |
+| `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
 | `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, info sheet | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |

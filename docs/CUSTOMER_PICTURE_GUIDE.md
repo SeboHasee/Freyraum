@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 This guide documents the current customer workflow only.
 
@@ -100,7 +100,10 @@ zurücksetzen** to restore it. The artwork stays the same configured size on the
 wall and grows on screen together with the photo as you zoom. Zoom buttons smoothly
 and the mouse wheel bring the artwork center toward the screen center, while pinch
 stays anchored to the fingers. Double-click (or double-tap) zooms in at that spot;
-double-click again to return to the whole photo, just like the gallery. A nearby mouse gives a very subtle tilt
+double-click again to return to the whole photo, just like the gallery.
+Shift+double-click zooms out one step; Shift+arrow keys move the enlarged photo.
+Wheel, buttons and keys zoom by the same amount per step in the gallery and
+the photo room. A nearby mouse gives a very subtle tilt
 that eases back to neutral; stronger contact/directional shadows keep the print
 attached to the wall. Shared audio, settings, fullscreen, and contextual help
 remain available in the room view.

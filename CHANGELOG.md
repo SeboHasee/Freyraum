@@ -1,5 +1,33 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
+
+## Unreleased — v1.45 handoff implementation (2026-10-22)
+
+- **One zoom curve for gallery and photo room:** wheel notches, zoom buttons
+  and `+`/`-` keys now multiply the magnification by the same factor in both
+  views (`wheelZoomFactor`, `ZOOM_STEP_FACTOR` = 1.25 in
+  `src/interaction/touchGestures.ts`). The gallery used to add a constant
+  camera distance, so its zoom accelerated near the artwork (~7 % per notch
+  at the fitted view, ~29 % close up) while the room used ~10.5 %; both now
+  zoom ~12.7 % per 100 px notch. `GalleryManager.addZoomDelta` was replaced by
+  `zoomByFactor`.
+- **Trackpad pinch gain:** ctrl+wheel (trackpad pinch) zooms 2.5× more per
+  delta in both views, so pinching feels as direct as on touch.
+- **Photo room:** Shift+double-click zooms out one double-click step at the
+  pointer; Shift+arrow keys pan the zoomed photo (eased, 15 % of the view per
+  press). Help lists both.
+- **Hub panorama accessibility:** a polite live region announces
+  "Bild 3 von 4: <Titel>" once the strip settles on an artwork.
+- **Tooling:** `npm run measure:room-zoom` traces raster, paint, decode, style
+  and layout work for wheel, button, double-click and reset zooms in both
+  views (baseline in `FINDINGS.md`).
+- **Tests:** the phone suite's strip-reach check polls the end state instead
+  of trusting a 1 s stability window (headless rAF starvation, lesson 132);
+  `test:touch-gestures` sweeps artwork spans at five phone sizes to prove
+  every side-wall artwork can be fully framed; new zoom-curve, Shift+arrow,
+  Shift+double-click and announcement checks.
+- **Docs:** stale `validate:museum-hub` failure note in `docs/HANDOFF.md`
+  marked superseded; v1.43–v1.45 starting points merged.
 
 ## Unreleased — v1.44 photo-room zoom-out drift (2026-10-21)
 

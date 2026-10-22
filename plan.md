@@ -1,9 +1,28 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+> Latest markdown audit: 2026-10-21 (v1.45 handoff implementation).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Handoff implementation (v1.45, 2026-10-22)
+
+- [x] 0.1 Phone strip-reach flake diagnosed (rAF starvation) and fixed in the
+      test; pure side-wall reachability sweep in `test:touch-gestures`.
+- [x] 0.2 Stale handoff validation note superseded; starting points merged.
+- [x] 0.3 Validation recorded in `docs/HANDOFF.md` → "v1.45 validation".
+- [x] 1.1 `npm run measure:room-zoom` and baseline (`FINDINGS.md` v1.45).
+- [ ] 1.2 Split-layer raster for the room camera (target: double-click).
+- [x] 1.3 Shared multiplicative zoom curve + trackpad pinch gain.
+- [x] 1.4 Shift+double-click step-out. [ ] Gallery reset drift check.
+- [x] 1.5 Shift+arrow pan. [ ] Pointer-anchored wheel modifier. [ ] Zoom indicator.
+- [x] 2.6 Strip position announcement. [ ] Larger-text checks. [ ] Reduce-chrome toggle.
+- [ ] 2.1 Bottom-sheet snap points; 2.2 room swipe/parallax; 2.3 landscape
+      side rail; 2.4 timeline auto-hide; 2.5 hub pinch/edge preview/deep links;
+      2.7 flick/snap/swipe browser checks.
+- [ ] Phase 3 (responsive images, Fraktal size, lazy hub decode, editor
+      bundle split, PWA), phase 4 (CI split, baselines, Lighthouse, device
+      overlay, old issues), phase 5 (content; needs customer input).
 
 ## Photo-room zoom-out drift (v1.44, 2026-10-21)
 
