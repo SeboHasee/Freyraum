@@ -23,6 +23,8 @@ export const MAX_INBOX_IMAGE_BYTES = 50 * 1024 * 1024;
 export const WARN_INBOX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_BACKGROUND_BYTES = 25 * 1024 * 1024;
 export const MAX_SIDECAR_BYTES = 64 * 1024;
+// v1.46 — the deployed manifest is a blocking script: metadata only, no image bytes.
+export const MAX_DEPLOY_MANIFEST_BYTES = 2 * 1024 * 1024;
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg|avif)$/i;
 
@@ -136,6 +138,26 @@ export function validateDeploy(root) {
             : `artwork ${entry.id}: image "${file}" is missing from customer-preview/images.`
         );
       }
+    }
+  }
+
+  // ── Deployed manifest (public/customer-artworks.js, v1.46) ─────────────
+  const deployManifestPath = join(root, 'public', 'customer-artworks.js');
+  if (!existsSync(deployManifestPath)) {
+    issues.warnings.push('public/customer-artworks.js is missing. Run `npm run import:artworks` before building.');
+  } else {
+    const size = statSync(deployManifestPath).size;
+    if (size > MAX_DEPLOY_MANIFEST_BYTES) {
+      issues.errors.push(
+        `public/customer-artworks.js is ${(size / 1048576).toFixed(1)} MB (max ${MAX_DEPLOY_MANIFEST_BYTES / 1048576} MB). ` +
+          'Every visitor downloads it before the gallery starts.'
+      );
+    }
+    if (/"webglImage"\s*:|data:image\//.test(readFileSync(deployManifestPath, 'utf8'))) {
+      issues.errors.push(
+        'public/customer-artworks.js embeds image bytes. The deployed site loads images from images/; ' +
+          'embedded copies belong only in the local preview (customer-preview/customer-artworks.js).'
+      );
     }
   }
 

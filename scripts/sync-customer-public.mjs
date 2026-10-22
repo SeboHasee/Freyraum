@@ -7,7 +7,9 @@
  * during `npm run build` and includes them in the `dist/` output for GitHub Pages.
  *
  * Files copied:
- *   customer-preview/customer-artworks.js  → public/customer-artworks.js
+ *   customer-preview/customer-artworks.web.js → public/customer-artworks.js
+ *     (v1.46: web variant without embedded image bytes; the local preview keeps
+ *     its `file://` fallback in customer-preview/customer-artworks.js)
  *   customer-preview/customer-audio.js     → public/customer-audio.js
  *   customer-preview/images/               → public/images/  (entire folder)
  *   customer-preview/audio/                → public/audio/   (entire folder, if present)
@@ -82,7 +84,7 @@ function syncFile(src, dest) {
 // ── Sync JS injection files ──────────────────────────────────────────────────
 
 const artworksJs = syncFile(
-  join(PREVIEW, 'customer-artworks.js'),
+  join(PREVIEW, 'customer-artworks.web.js'),
   join(PUBLIC, 'customer-artworks.js'),
 );
 const audioJs = syncFile(
@@ -92,7 +94,7 @@ const audioJs = syncFile(
 
 if (!artworksJs) {
   process.stderr.write(
-    'sync-customer-public: customer-preview/customer-artworks.js not found. ' +
+    'sync-customer-public: customer-preview/customer-artworks.web.js not found. ' +
     'Run scripts/import-artworks.mjs first.\n',
   );
   process.exit(1);

@@ -9,12 +9,12 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isSafeRelativePath, validateDeploy } from './validate-deploy.mjs';
+import { MAX_DEPLOY_MANIFEST_BYTES, isSafeRelativePath, validateDeploy } from './validate-deploy.mjs';
 
 const created = [];
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108020000009077053e', 'hex');
 
-function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'] }) {
+function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'], deployManifest }) {
   const root = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.freyraum-validate-'));
   created.push(root);
   const customer = join(root, 'customer-artworks');
@@ -24,6 +24,10 @@ function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'],
   for (const name of backgrounds) writeFileSync(join(customer, 'Backgrounds', name), PNG);
   for (const name of inbox) writeFileSync(join(customer, 'inbox', name), PNG);
   for (const name of previewImages) writeFileSync(join(root, 'customer-preview', 'images', name), PNG);
+  if (deployManifest !== undefined) {
+    mkdirSync(join(root, 'public'), { recursive: true });
+    writeFileSync(join(root, 'public', 'customer-artworks.js'), deployManifest);
+  }
   writeFileSync(
     join(customer, 'artworks.json'),
     JSON.stringify(manifest ?? [{ id: 'akt-27', image: './images/akt-27.png' }])
@@ -134,6 +138,28 @@ test('paths outside the project fail', () => {
   assert.equal(isSafeRelativePath('https://example.com/a.png'), false);
   assert.equal(isSafeRelativePath('/abs.png'), false);
   assert.equal(isSafeRelativePath('Backgrounds/ok.png'), true);
+});
+
+test('deployed manifest with metadata only passes', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n',
+  }));
+  assert.deepEqual(result.errors, []);
+  assert.ok(!result.warnings.some((warning) => warning.includes('public/customer-artworks.js')));
+});
+
+test('deployed manifest with embedded image bytes fails', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","webglImage":"data:image/png;base64,iVBORw0KGgo="}];\n',
+  }));
+  assert.ok(result.errors.some((error) => error.includes('embeds image bytes')), result.errors.join('\n'));
+});
+
+test('oversized deployed manifest fails', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: `window.__FREYRAUM_PAD = "${'x'.repeat(MAX_DEPLOY_MANIFEST_BYTES + 1)}";\n`,
+  }));
+  assert.ok(result.errors.some((error) => error.includes('public/customer-artworks.js is')), result.errors.join('\n'));
 });
 
 test('inbox names that differ only in case fail', () => {
