@@ -1,5 +1,5 @@
 # Contributing
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## Validation baseline
 
@@ -10,8 +10,12 @@ npm install
 npm run lint
 npm run build:typecheck
 npm run build
+npm test
 npm run test:frame-budget
 ```
+
+`npm test` runs every no-browser check (the quality CI runs it too); browser
+suites are listed in `docs/REGRESSION_TOOLING.md`.
 
 For artwork/importer/museum-hub/runtime-doc changes also run:
 
@@ -104,6 +108,7 @@ After each dependency-upgrade batch, run and record:
 - `npm run lint`
 - `npm run build:typecheck`
 - `npm run build`
+- `npm test`
 - `npm run test:frame-budget`
 
 If a risky major upgrade is deferred, log it in `docs/DEPENDENCY_MAINTENANCE_PLAN.md`.

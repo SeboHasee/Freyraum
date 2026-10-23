@@ -17,6 +17,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// Mirrors WHEEL_ZOOM_PER_PX in src/interaction/touchGestures.ts (shared gallery/room curve).
+const WHEEL_ZOOM_PER_PX = 0.0012;
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const chromePath = process.env.FREYRAUM_CHROME_PATH || '/usr/bin/google-chrome';
 const previewUrl = process.env.FREYRAUM_ROOM_VIEW_URL
@@ -917,7 +920,8 @@ try {
   );
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 690, y: 420, button: 'left', buttons: 0 });
   await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Fotoansicht zurücksetzen\"]').click()");
-  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
+  // Terminal wait: the reset glide can be rAF-starved headless (Lesson 125).
+  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')", 60_000);
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'auto',
@@ -1011,7 +1015,7 @@ try {
   assert.equal(roomHelp.title, 'Bedienung im Fotoraum');
   assert.ok(roomHelp.rows.some((row) => row.includes('Mausrad') && row.includes('Kunstwerk')));
   assert.ok(roomHelp.rows.some((row) => row.includes('vergrößerter Ansicht') && row.includes('Ziehen')));
-  assert.ok(roomHelp.rows.some((row) => row.includes('zurücksetzen') && row.includes('Doppelklick')));
+  assert.ok(roomHelp.rows.some((row) => row.includes('heranzoomen') && row.includes('Doppelklick')));
   assert.ok(!roomHelp.rows.some((row) => row.includes('Vorheriges / nächstes Bild') || row.includes('Vollbild')));
   assert.ok(roomHelp.keycaps >= roomHelp.rows.length, 'help presents controls in semantic keycaps');
   assert.equal(roomHelp.focusedControl, 'Hilfe schließen', 'room help initially focuses its close control');
@@ -1231,6 +1235,12 @@ try {
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   let camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'zoom control zooms the photo camera');
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__zoom-indicator .zoom-indicator__badge').textContent"),
+    '125\u202f%',
+    'zoom indicator shows the target magnification inside the room dialog'
+  );
+  await waitFor(`document.querySelector('.gallery-room-view__zoom-indicator [role="status"]').textContent === 'Zoom 125 Prozent'`);
   await waitForArtworkCenter();
   let artworkScreenCenter = await readArtworkScreenCenter();
   assert.ok(
@@ -1255,7 +1265,7 @@ try {
   const wheelFocus = await evaluate(`({ x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) })`);
   const beforeWheel = await readArtworkScreenCenter();
   const wheelDeltaY = -100;
-  const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * 0.001);
+  const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * WHEEL_ZOOM_PER_PX);
   await command('Input.dispatchMouseEvent', {
     type: 'mouseWheel',
     x: wheelFocus.x,
@@ -1283,7 +1293,17 @@ try {
   );
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
+  // Hold still past the 100 ms velocity window: CDP delivers press/move/release
+  // within milliseconds, which the v1.41 release physics reads as a fling whose
+  // glide would push the camera to the photo edge and clamp the next zoom path.
+  await delay(250);
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
+  await waitFor(`(() => {
+    const transform = document.querySelector('.gallery-room-view__scene').style.transform;
+    const settled = window.__freyraumDragSettle === transform;
+    window.__freyraumDragSettle = transform;
+    return settled;
+  })()`);
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.doesNotMatch(camera, /translate3d\(0px, 0px/, 'drag pans the photo');
   assert.equal(
@@ -1361,7 +1381,7 @@ try {
     'zoom button centers the other room artwork using its own projective center'
   );
   const otherRoomBeforeWheel = await readArtworkScreenCenter();
-  const otherRoomWheelScale = otherRoomBeforeWheel.scale * Math.exp(0.1);
+  const otherRoomWheelScale = otherRoomBeforeWheel.scale * Math.exp(100 * WHEEL_ZOOM_PER_PX);
   const otherRoomWheelPoint = await evaluate(
     `({ x: innerWidth - 80, y: Math.round(innerHeight * 0.38) })`
   );
@@ -1400,18 +1420,102 @@ try {
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'keyboard shortcut zooms without invoking gallery zoom');
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
+  // v1.43: mouse double-click zooms in at the pointer and back, like the gallery.
+  const doubleClickAt = async (x, y) => {
+    for (const clickCount of [1, 2]) {
+      await command('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
+      await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
+    }
+  };
+  const doubleClickPoint = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view').getBoundingClientRect();
+    return { x: Math.round(rect.left + rect.width * 0.6), y: Math.round(rect.top + rect.height * 0.55) };
+  })()`);
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  // The camera is its own compositor layer (will-change) while the zoom animates.
+  await waitFor(`document.querySelector('.gallery-room-view__scene').classList.contains('is-camera-moving')
+    && getComputedStyle(document.querySelector('.gallery-room-view__scene')).willChange === 'transform'`);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - 2.5) < 0.001`, 60_000);
+  const doubleClickCamera = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view').getBoundingClientRect();
+    const match = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px, 0px\\) scale\\(([\\d.]+)\\)/
+      .exec(document.querySelector('.gallery-room-view__scene').style.transform);
+    return { left: rect.left, top: rect.top, offsetX: Number(match[1]), offsetY: Number(match[2]), scale: Number(match[3]) };
+  })()`);
+  const anchoredX = (doubleClickPoint.x - doubleClickCamera.left - doubleClickCamera.offsetX) / doubleClickCamera.scale;
+  const anchoredY = (doubleClickPoint.y - doubleClickCamera.top - doubleClickCamera.offsetY) / doubleClickCamera.scale;
+  assert.ok(
+    Math.abs(anchoredX - (doubleClickPoint.x - doubleClickCamera.left)) < 2
+      && Math.abs(anchoredY - (doubleClickPoint.y - doubleClickCamera.top)) < 2,
+    `double-click zoom keeps the clicked photo point under the pointer: ${JSON.stringify({ doubleClickPoint, doubleClickCamera })}`
+  );
+  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-camera-moving')");
+  // v1.44: the zoom-out scales about its fixed point instead of easing pan and
+  // scale separately (which slid the view to the left edge while still zoomed).
+  const zoomOutPath = evaluate(`new Promise((resolve) => {
+    const scene = document.querySelector('.gallery-room-view__scene');
+    const parse = () => {
+      const match = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px, 0px\\) scale\\(([\\d.]+)\\)/.exec(scene.style.transform);
+      return match ? { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) } : null;
+    };
+    const frames = [];
+    const startedAt = performance.now();
+    const tick = () => {
+      const camera = parse();
+      if (camera) frames.push(camera);
+      if ((camera && camera.scale === 1 && camera.x === 0 && camera.y === 0) || performance.now() - startedAt > 55000) resolve(frames);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })`);
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  const zoomOutFrames = await zoomOutPath;
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
+  const fixedContentX = -doubleClickCamera.offsetX / (doubleClickCamera.scale - 1);
+  const fixedContentY = -doubleClickCamera.offsetY / (doubleClickCamera.scale - 1);
+  const zoomOutDrift = Math.max(...zoomOutFrames.map((frame) => Math.max(
+    Math.abs(frame.x + fixedContentX * frame.scale - fixedContentX),
+    Math.abs(frame.y + fixedContentY * frame.scale - fixedContentY)
+  )));
+  assert.ok(
+    zoomOutFrames.length > 1 && zoomOutDrift < 2,
+    `double-click zoom-out keeps its fixed photo point still (max drift ${zoomOutDrift.toFixed(2)}px over ${zoomOutFrames.length} frames)`
+  );
+  console.log('✓ double-click zooms in at the pointer and back; camera layer only while moving');
+  // v1.45: Shift+arrows pan the zoomed photo; Shift+double-click steps out.
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - 2.5) < 0.001`, 60_000);
+  const readOffsetX = () => evaluate(`Number(/translate3d\\(([-\\d.]+)px/
+    .exec(document.querySelector('.gallery-room-view__scene').style.transform)[1])`);
+  const offsetBeforeKeyPan = await readOffsetX();
+  await evaluate(`(() => {
+    const close = document.querySelector('.gallery-room-view__back');
+    close.focus();
+    close.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+  })()`);
+  await waitFor(`Number(/translate3d\\(([-\\d.]+)px/
+    .exec(document.querySelector('.gallery-room-view__scene').style.transform)[1]) < ${offsetBeforeKeyPan} - 20`, 60_000);
+  for (const clickCount of [1, 2]) {
+    await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: doubleClickPoint.x, y: doubleClickPoint.y, button: 'left', buttons: 1, clickCount, modifiers: 8 });
+    await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: doubleClickPoint.x, y: doubleClickPoint.y, button: 'left', buttons: 0, clickCount, modifiers: 8 });
+  }
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
+  console.log('✓ Shift+arrow pans the zoomed photo; Shift+double-click steps back out');
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
   await waitFor(`Number(document.querySelector('.gallery-room-view__scene').style.transform
-    .split(' scale(')[1]?.slice(0, -1)) > 5.8`);
+    .split(' scale(')[1]?.slice(0, -1)) > 5.8`, 60_000);
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     if (!zoom.disabled) zoom.click();
   })()`);
   await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
-    .split(' scale(')[1]?.slice(0, -1)) - 6) < 0.001`);
+    .split(' scale(')[1]?.slice(0, -1)) - 6) < 0.001`, 90_000);
   const transformAtMaximumZoom = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );
@@ -1450,6 +1554,15 @@ try {
       buttons: 0,
     });
   }
+  // v1.41: release momentum rubber-bands past the edge, then springs back.
+  // Headless SwiftShader can starve rAF for seconds, so wait for the value.
+  await waitFor(`(() => {
+    const match = /translate3d\\(([-\\d.]+)px, [-\\d.]+px, 0px\\) scale\\(([\\d.]+)\\)/
+      .exec(document.querySelector('.gallery-room-view__scene').style.transform);
+    if (!match) return false;
+    const width = document.querySelector('.gallery-room-view').getBoundingClientRect().width;
+    return Math.abs(Number(match[1]) + width * (Number(match[2]) - 1)) < 1;
+  })()`, 60_000);
   const edgeZoomStart = await readArtworkScreenCenter();
   const maxOffsetAtEdge = edgeZoomStart.viewport.width * (edgeZoomStart.scale - 1);
   assert.ok(
@@ -1482,7 +1595,7 @@ try {
     'edge-limited zoom settles at the reachable artwork-centered offset'
   );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
   console.log('✓ photo zoom, drag pan, reset, and keyboard zoom');
 
   await command('Emulation.setDeviceMetricsOverride', {
@@ -1680,8 +1793,12 @@ try {
       Number.parseFloat(image.style.getPropertyValue('--artwork-tilt-y')),
     ];
   })()`);
-  assert.ok(motionTilt.every((tilt) => Number.isFinite(tilt) && Math.abs(tilt) <= 1.2),
-    `sensor tilt stays inside the subtle angle range (${motionTilt})`);
+  assert.ok(motionTilt.every((tilt) => Number.isFinite(tilt) && Math.abs(tilt) <= 3.5),
+    `sensor tilt stays inside the bounded visible angle range (${motionTilt})`);
+  assert.ok(
+    await evaluate("document.querySelector('.gallery-room-view__scene').classList.contains('is-sensor-tilt')"),
+    'sensor-driven tilt bypasses the CSS transform transition'
+  );
   await evaluate(`(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -1725,6 +1842,39 @@ try {
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.[1-9]/, 'touch pinch zooms the photo camera');
   await command('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  // v1.46 (C6): a fast one-finger flick on the zoomed photo glides on after
+  // the release (momentum) and never leaves the pan limits. Headless frames
+  // can be slow, so compare the release position with the settled position
+  // instead of sampling a fixed time window.
+  await waitForCameraSettled();
+  const readSceneX = `(() => {
+    const scene = document.querySelector('.gallery-room-view__scene');
+    const match = /translate3d\\(([-\\d.]+)px, [-\\d.]+px, 0px\\) scale\\(([\\d.]+)\\)/.exec(scene.style.transform);
+    const width = document.querySelector('.gallery-room-view').getBoundingClientRect().width;
+    return match ? { x: Number(match[1]), limit: -width * (Number(match[2]) - 1) } : null;
+  })()`;
+  await command('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ id: 3, x: 300, y: 420, radiusX: 2, radiusY: 2, force: 1 }],
+  });
+  for (let step = 1; step <= 5; step += 1) {
+    await new Promise((resolveStep) => setTimeout(resolveStep, 8));
+    await command('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ id: 3, x: 300 - step * 24, y: 420, radiusX: 2, radiusY: 2, force: 1 }],
+    });
+  }
+  const atRelease = await evaluate(readSceneX);
+  await command('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await waitForCameraSettled();
+  const settled = await evaluate(readSceneX);
+  const flick = { releaseX: atRelease?.x, finalX: settled?.x, limit: settled?.limit };
+  assert.ok(atRelease && settled && settled.x < atRelease.x - 1,
+    `a touch flick keeps moving after the release (${JSON.stringify(flick)})`);
+  assert.ok(settled.x >= settled.limit - 0.5 && settled.x <= 0.5,
+    `the flick comes to rest inside the pan limits (${JSON.stringify(flick)})`);
+  flick.maxMoveAfter = atRelease.x - settled.x;
+  console.log(`✓ touch flick glides ${Math.round(flick.maxMoveAfter)} px after release and rests inside the pan limits`);
   await evaluate(`(() => {
     const close = document.querySelector('.gallery-room-view__back');
     close.focus();
@@ -1744,7 +1894,13 @@ try {
     'closing the room view restores the same selected timeline to its gallery parent'
   );
   assert.equal(
-    await evaluate("document.querySelector('#app > .prefs') !== null && document.querySelector('#app > .fullscreen-btn') !== null"),
+    await evaluate(`(() => {
+      // v1.42: on touch phones the shared controls return to the topbar "more" menu.
+      const phone = matchMedia('(max-width: 599px) and (pointer: coarse)').matches;
+      const host = phone ? '.topbar .phone-menu__panel' : '#app';
+      return document.querySelector(host + ' > .prefs') !== null
+        && document.querySelector(host + ' > .fullscreen-btn') !== null;
+    })()`),
     true,
     'shared utility controls return to gallery chrome when the room view closes'
   );
@@ -1783,6 +1939,11 @@ try {
     for (let step = 0; step < 14; step += 1) zoomIn.click();
   })()`);
   await waitFor("document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await waitFor(`(() => {
+    const live = document.querySelector('.zoom-indicator:not(.gallery-room-view__zoom-indicator) [role="status"]');
+    const match = /^Zoom (\\d+) Prozent$/.exec(live?.textContent ?? '');
+    return Boolean(match) && Number(match[1]) > 100;
+  })()`);
   await waitForFrames(60);
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 450 });
   assert.equal(

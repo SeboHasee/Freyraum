@@ -68,6 +68,12 @@ export interface Artwork {
    * Format: `data:image/<subtype>;base64,<base64-bytes>`
    */
   webglImage?: string;
+  /**
+   * v1.46: small web derivative for thumbnails (timeline). Set at boot from
+   * the deployed `__FREYRAUM_WEB_IMAGES` map; `image` then points at the
+   * device-sized derivative shared by hub, gallery and photo room.
+   */
+  thumbnailImage?: string;
   /** Runtime-only bundle context for resolving relative customer image paths. */
   imageSourceContext?: ArtworkImageSourceContext;
 }

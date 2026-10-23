@@ -1,6 +1,5 @@
 import { GalleryManager } from '../gallery/GalleryManager';
-
-const ZOOM_KEY_STEP = 0.6;
+import { ZOOM_STEP_FACTOR } from './touchGestures';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -57,12 +56,12 @@ export class KeyboardNav {
       case '+':
       case '=':
         e.preventDefault();
-        this.galleryManager.addZoomDelta(-ZOOM_KEY_STEP);
+        this.galleryManager.zoomByFactor(ZOOM_STEP_FACTOR);
         break;
       case '-':
       case '_':
         e.preventDefault();
-        this.galleryManager.addZoomDelta(ZOOM_KEY_STEP);
+        this.galleryManager.zoomByFactor(1 / ZOOM_STEP_FACTOR);
         break;
       case '0':
       case 'r':

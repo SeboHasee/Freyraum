@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -10,8 +10,11 @@ The default room follows the supplied reference: **Gartenszene** front-left,
 the right, over `Museum_ohne_Bilder.png`. The checked-in
 `customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
 In the museum hub, hovering a painting with a mouse or focusing it by keyboard
-gently deepens its wall shadow; the touch experience and artwork placement stay
-unchanged, and the selected painting keeps its separate highlight.
+gently deepens its wall shadow; the selected painting keeps its separate highlight.
+On portrait phones the museum is one continuous panorama: drag or flick
+sideways, the view glides and softly settles on artworks, and the artwork strip
+at the bottom follows along (tap once to glide there, tap again to open).
+Every artwork visible in the photo can be tapped; dragging never opens one.
 The source filenames are `Gatrenszene.png`, `Akt 27.png`, `Fraktal.png` and
 `Wunderbaum.png` in `customer-artworks/inbox/` (the garden filename is misspelled).
 After downloading a project update, run `Update Gallery.bat` / `Update Gallery.command`
@@ -51,10 +54,17 @@ Zoom buttons and wheel motion
 use the gallery's two-stage, frame-rate-independent camera easing on desktop and
 touch devices, with smooth target retargeting during repeated input; active drag
 and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
-smoothly returning tilt. On touch devices, the **↗** control optionally enables
-subtle artwork tilt from phone movement; sensor access is requested only after
-that action, and the feature can be disabled again. Unsupported or denied sensors
-leave touch controls available. Reduced motion disables sensor tilt. Stronger
+smoothly returning tilt. On touch devices, the **↗** control enables visible
+artwork tilt (up to 3.5°) from phone movement; sensor access is requested only
+after that action, and the feature can be disabled again. Unsupported or denied
+sensors leave touch controls available. Reduced motion disables sensor tilt.
+Touch panning glides on after release and springs back at the photo edges;
+double-tap (or a mouse double-click) zooms in at that point or back to the full
+photo, matching the interactive gallery; Shift+double-click steps out once and
+Shift+arrow keys pan the enlarged photo. Gallery and photo room share one zoom
+curve per wheel notch, button or key (v1.45). While the camera moves, the photo scene
+is a composited layer, so desktop zoom no longer re-rasters the photo and artwork
+every frame; it re-renders sharply once the camera settles. Stronger
 contact and directional shadows keep the print attached to the wall. This is a
 bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
@@ -99,7 +109,32 @@ customer visual acceptance.
   Each room uses a maximum of four works—two on the front
   wall and one safely inset on each side wall—with no oversized backing cards.
   Larger exhibitions paginate into additional room pages,
-  and narrow-portrait viewports split each room into left/right wall focus pages.
+  and narrow-portrait phones show each room as one draggable panorama with a
+  synced artwork strip (`src/hub/hubPanorama.ts`); artworks are never hidden by
+  wall group.
+- Touch interaction (v1.41) shares one gesture engine
+  (`src/interaction/touchGestures.ts`) across gallery, photo room and hub:
+  1:1 pan, anchored pinch, momentum, rubber-band edges, double-tap zoom and
+  flick navigation. On phones the interactive gallery also tilts the 3D artwork
+  with the motion sensor (automatic on Android; on iOS enable **Kunstwerk mit
+  dem Handy neigen** in the settings; reduced motion always switches it off).
+  Phone chrome is slimmer and the loading bar and mobile browser bar use the
+  museum wall colour.
+- Phones (v1.42): sound, settings, fullscreen and help sit behind one **⋯**
+  button in the top bar (also in the photo room), and the artwork information
+  is a bottom sheet — tap **Info**, pull the handle up to read more (it then
+  stays open), pull it down to close.
+- Phones (v1.46): the info sheet stops at peek, half and full; one tap on the
+  artwork hides the top bar, timeline and info together (tap again to bring
+  them back); in landscape the timeline becomes a side rail; in the photo room
+  a sideways swipe at normal zoom changes the room. Gallery and photo room
+  show a short zoom readout ("125 %"), and resetting the gallery zoom no
+  longer slides sideways.
+- Links (v1.46): `?artwork=<id>&view=gallery` opens an artwork directly, and
+  **Link teilen** in the artwork information shares or copies that link
+  (details: `docs/QUERY_PARAMETERS.md`). A phone visit now downloads about
+  4.8 MB instead of 18.6 MB (WebP images and backgrounds, editor loaded only
+  when opened).
 - **Local confirmation (2026-10-18):** the customer reports the intended setup
   works after running `Update Gallery.bat` and supplies a four-painting screenshot.
   Root-index and production-build smoke checks confirm all four images and the
@@ -133,6 +168,10 @@ customer visual acceptance.
   `file://` museum-hub preview may prefer embedded `webglImage` data when the
   declared customer image resolves to a local file URL that is less reliable
   for WebGL upload.
+- v1.46: the deployed site gets `public/customer-artworks.js` without
+  embedded `webglImage` copies plus WebP size variants in `web-images/`
+  (built during `npm run import:artworks` when sharp is installed); the local
+  `customer-preview/customer-artworks.js` keeps the embedded fallback.
 - Generated `customer-artworks.js` now also publishes
   `window.__FREYRAUM_ARTWORK_BUNDLE__` with a script-derived `assetBaseUrl`,
   so the same imported customer image bundle resolves consistently in the local

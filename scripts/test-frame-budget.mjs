@@ -12,7 +12,7 @@
  * self-contained O(N) reference re-implements the pre-optimization algorithm to
  * compare against.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { transformSync } from 'esbuild';
@@ -145,3 +145,37 @@ console.log(
   `PASS: O(1) FrameBudgetMonitor matches O(N) reference across ${deltas.length} frames ` +
     `(fields: ${FIELDS.join(', ')}).`
 );
+
+// v1.46 (B3) — visitor bundle budget. Reads the built `dist/` (CI runs this
+// after `npm run build`): the entry chunk must stay under budget and must not
+// contain the lazily loaded placement-editor UI.
+const MAX_VISITOR_ENTRY_BYTES = 1_150_000;
+const EDITOR_ONLY_MARKERS = ['museum-hub__publish-login-title', 'museum-hub__save-status', 'museum-hub__place-list'];
+const assetsDir = resolve(here, '../dist/assets');
+if (!existsSync(assetsDir)) {
+  console.log('SKIP bundle budget: dist/assets is missing (run `npm run build` first).');
+} else {
+  const files = readdirSync(assetsDir).filter((name) => name.endsWith('.js'));
+  const entry = files.find((name) => name.startsWith('main-'));
+  const editorChunk = files.find((name) => name.startsWith('editorModules-'));
+  const problems = [];
+  if (!entry) problems.push('no main-*.js entry chunk in dist/assets');
+  if (!editorChunk) problems.push('no editorModules-*.js chunk: the placement editor is bundled into the visitor download');
+  if (entry) {
+    const bytes = statSync(resolve(assetsDir, entry)).size;
+    if (bytes > MAX_VISITOR_ENTRY_BYTES) {
+      problems.push(`${entry} is ${bytes} bytes (budget ${MAX_VISITOR_ENTRY_BYTES})`);
+    }
+    const code = readFileSync(resolve(assetsDir, entry), 'utf8');
+    for (const marker of EDITOR_ONLY_MARKERS) {
+      if (code.includes(marker)) problems.push(`${entry} contains editor-only text "${marker}"`);
+    }
+    if (problems.length === 0) {
+      console.log(`PASS: visitor entry ${entry} is ${bytes} bytes (budget ${MAX_VISITOR_ENTRY_BYTES}); editor UI is in ${editorChunk}.`);
+    }
+  }
+  if (problems.length > 0) {
+    console.error(`FAIL bundle budget:\n  ${problems.join('\n  ')}`);
+    process.exit(1);
+  }
+}

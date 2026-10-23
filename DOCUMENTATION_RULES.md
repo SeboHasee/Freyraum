@@ -1,5 +1,5 @@
 # Documentation Rules
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## Goal
 
@@ -56,6 +56,7 @@ npm run docs:check-config-authority
 npm run lint
 npm run build:typecheck
 npm run build
+npm test
 npm run test:frame-budget
 ```
 

@@ -1,5 +1,152 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+
+## 2026-10-22 — Download size lessons
+
+### Lesson 142 — Probe and build only while no browser suite runs
+
+A photo-room suite run timed out with the camera at scale 1.1997 of 1.25
+while a production build and two Playwright probes ran beside it; the rerun
+alone passed those checks. SwiftShader suites need the machine to themselves:
+start probes and builds before or after, never during.
+
+### Lesson 141 — A test that CI never runs goes stale silently
+
+Quality CI called `npm run test --if-present`, but there was no `test`
+script, so no pure check ran in CI. `test:gallery-room-view` had been failing
+since the B3 lazy-editor change (it looked for `new EditorGalleryRoomViews`).
+`npm test` now aggregates every no-browser check; new pure checks belong in it.
+
+### Lesson 140 — A fix in one view is a search key for its siblings
+
+v1.44 fixed the photo room's sideways reset drift (pan and zoom eased with
+different λ). The WebGL gallery used the same pattern and kept the bug for two
+more releases. After fixing a motion or geometry bug, search the other camera
+and gesture paths for the same structure in the same change.
+
+### Lesson 139 — A width breakpoint does not describe a phone in landscape
+
+"Phone" rules keyed to `max-width: 599px` never reached an 844×390 phone,
+which fell through to desktop chrome sizes and kept 118 px for the artwork.
+Phone layouts need a landscape condition too (`max-height` + `pointer:
+coarse` + `orientation: landscape`), checked by a landscape browser pass.
+
+### Lesson 138 — Wait for transitions to finish, not for a fixed delay
+
+The first immersive-view check read `visibility: visible` 700 ms after the
+tap: in the headless suite, CSS transitions can run far slower than wall
+time, while `pointer-events` (not animated) had already switched. Browser
+checks of animated chrome must wait with `settleAnimations()` (the
+elements' `getAnimations()`), never with a guessed delay.
+
+### Lesson 137 — Changing an asset URL breaks tests that check the URL
+
+B4a served the hub photo as a WebP copy, and the deploy smoke test failed:
+it expected the original `/backgrounds/<name>.png` path. When an asset can
+be swapped for a derived copy, tests should accept the source path or the
+documented derived name (`web-images/bg-<name>-…`), not one fixed file.
+
+### Lesson 136 — `npm i <pkg>` removes packages installed with `--no-save`
+
+Adding sharp with `npm i -D` pruned the Playwright copy that had been
+installed with `npm i --no-save playwright`, and every browser probe failed
+with "Cannot find module". After any dependency change, reinstall the
+unsaved test tools before running browser suites.
+
+### Lesson 135 — A fixed count in a test is a copy of customer data
+
+`test:editor-rooms` asserted exactly 2 photo rooms; v1.42 configured 4 and the
+check failed for months behind other failures. Read counts from the loaded
+configuration (or the editor export) instead of restating them (see lesson 128).
+
+### Lesson 134 — The local preview build copies `public/` over its output
+
+The Vite local build (`customer-preview/`, `emptyOutDir`) also copies
+`public/`. Once the web manifest without embedded images went to `public/`,
+the build would have replaced the `file://` manifest with it and broken the
+offline preview. Keep the two manifests separate and preserve the local one
+across the build (`keepLocalPreviewManifests` in `vite.local.config.ts`);
+measure what the deployed artifact actually contains before optimizing.
+
+## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 133 — A browser test that restates a tuning constant drifts with it
+
+v1.45 changed the shared wheel curve from 0.001 to 0.0012 per pixel. The pure
+and static tests were updated, but the photo-room browser suite had the old
+rate written out twice, and it timed out at a scale that was exactly the new
+curve. Name the constant in the test, and have a fast static check confirm it
+matches the source, so the slow suite cannot silently fall out of date.
+
+### Lesson 132 — "Stopped moving" is not "arrived" under a starved renderer
+
+A browser test treated four equal pan reads over ~1 s as settled; headless
+SwiftShader can pause rAF that long mid-glide, so the check sometimes measured
+a half-finished glide and reported a side-wall artwork as off screen. Poll the
+asserted end state with a deadline, and print the measured bounds in the
+failure message so a flake can be told apart from a geometry bug at once.
+
+### Lesson 131 — Ease a camera as one transform, not per component
+
+Easing pan and scale independently toward a reset target made the faster
+component (pan) arrive first: the zoomed view slid to the photo edge, then
+shrank — read by the user as a sideways drift. Derive pan from scale progress
+around an anchor (for zoom-out: the transform's fixed point), and assert the
+anchor's screen path frame by frame in the browser suite.
+
+### Lesson 130 — Same easing is not the same smoothness
+
+Matching the gallery's easing constants did not make the DOM photo room feel
+the same: its cost was raster and image decode at every intermediate CSS
+scale, invisible in headless frame counts. Measure raster tasks in a trace and
+give animated DOM cameras a compositing hint only while they move.
+
+### Lesson 129 — Synthetic input meets real release physics
+
+After v1.41 added release momentum, the photo-room suite's CDP drag (press,
+move and release within milliseconds) read as a fling; the glide pushed the
+camera to the photo edge and a later wheel-zoom path check failed with a
+~125 px deviation. It reproduced when run alone, so it was not concurrency.
+When a test needs a plain drag, hold past the 100 ms velocity window before
+releasing and wait for the camera to settle; test flicks deliberately.
+
+### Lesson 127 — Assert visibility, not only state classes
+
+The info panel had `is-revealed` on phones but a later touch rule with equal
+specificity kept it at `opacity: 0` for a whole release. Browser tests must
+check computed opacity and pointer events on touch emulation, not just classes.
+
+### Lesson 128 — Curated customer data is not a test fixture
+
+Exact geometry expectations broke once the customer curated slots in the
+editor. Test invariants and plausible ranges against shipped data; keep exact
+values for synthetic fixtures only.
+
+### Lesson 123 — Never hide projected artworks by wall group
+
+The narrow hub hid every artwork outside a "focused" wall although the photo
+still showed those walls, so visitors saw empty walls and could not tap them.
+Decide visibility and focusability from measured on-screen bounds; keep
+shadows and lights paired with their artwork.
+
+### Lesson 124 — No CSS transition on a property updated every frame
+
+A `transition: transform 1100ms` on the sensor-driven artwork restarted on each
+orientation event, turning live input into a lagging, nearly invisible motion.
+Drive continuous input in JS (frame-rate-independent smoothing) and remove the
+CSS transition while it is active.
+
+### Lesson 125 — One gesture model for every touch surface
+
+Two views with different pinch models, smoothing and no momentum felt like two
+products. Share velocity, momentum, rubber-band, tap-slop and double-tap logic
+in one pure, tested module, and keep reduced motion to motion only.
+
+### Lesson 126 — A headless timeout is not always a logic bug
+
+SwiftShader starves `requestAnimationFrame` while WebGL renders behind an
+overlay. Sample the value over time before changing camera code; extend the
+test wait when the value still converges.
 
 ## 2026-10-18 — Presentation authority lessons
 

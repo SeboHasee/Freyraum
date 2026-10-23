@@ -2,8 +2,24 @@ import type { Artwork } from '../config/artworks';
 import type { GalleryRoomView as GalleryRoomViewConfig } from '../config/museumHub';
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { smoothDamp } from '../utils/math';
+import { webBackgroundUrl } from '../utils/webBackgrounds';
+import { ZoomIndicator } from '../ui/ZoomIndicator';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 import {
+  DoubleTapDetector,
+  exceedsTapSlop,
+  isMotionReduced,
+  MIN_FLING_VELOCITY,
+  normalizeWheelDelta,
+  resolveSwipeDirection,
+  rubberBandClamp,
+  stepMomentum,
+  VelocityTracker,
+  wheelZoomFactor,
+  ZOOM_STEP_FACTOR,
+} from '../interaction/touchGestures';
+import {
+  driftDeviceNeutral,
   normalizeDeviceArtworkTilt,
   requestDeviceOrientationAccess,
   smoothDeviceArtworkTilt,
@@ -16,6 +32,16 @@ const CAMERA_ZOOM_LAMBDA = 4;
 const CAMERA_PAN_LAMBDA = 5;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 900;
+/** v1.41: sensor tilt is visible on a phone (was 1.2°, under one pixel). */
+const SENSOR_TILT_MAX_DEG = 3.5;
+const SENSOR_TILT_RANGE_DEG = 16;
+const SENSOR_TILT_DEAD_ZONE_DEG = 1.2;
+/** Double-tap zoom level shared in spirit with the gallery (×2.5). */
+const DOUBLE_TAP_SCALE = 2.5;
+/** v1.45 — Shift+arrow pans this share of the viewport per press. */
+const KEYBOARD_PAN_SHARE = 0.15;
+/** Idle time after the last camera frame before the scene re-rasters sharply. */
+const CAMERA_SETTLE_RASTER_MS = 160;
 
 interface PhotoPointer {
   x: number;
@@ -46,6 +72,8 @@ type CameraGesture =
     };
 
 function resolveBackgroundUrl(src: string): string {
+  const web = webBackgroundUrl(src);
+  if (web) return new URL(web, window.location.href).href;
   const filename = src.replace(/^Backgrounds\//, '');
   return new URL(`${import.meta.env.BASE_URL}backgrounds/${filename}`, window.location.href).href;
 }
@@ -73,6 +101,7 @@ export class GalleryRoomView {
   private readonly closeButton: HTMLButtonElement;
   private readonly utilityControls: HTMLDivElement;
   private readonly timelineHost: HTMLDivElement;
+  private readonly zoomIndicator: ZoomIndicator;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
   private readonly motionPreference: MediaQueryList;
@@ -105,6 +134,16 @@ export class GalleryRoomView {
   private motionModeObserver: MutationObserver | null = null;
   private gesture: CameraGesture | null = null;
   private pointerDragStarted = false;
+  private readonly preloadedBackgrounds = new Map<string, HTMLImageElement>();
+  private readonly velocity = new VelocityTracker();
+  private readonly doubleTap = new DoubleTapDetector();
+  private momentumFrame = 0;
+  private cameraSettleTimer = 0;
+  /** v1.44 — viewport size cached between resizes; camera frames never read layout. */
+  private cachedViewport: { width: number; height: number } | null = null;
+  private cameraControlState = '';
+  private lastPointerType = '';
+  private motionNeutralAt = 0;
   private timelineElement: HTMLElement | null = null;
   private timelineOriginalParent: HTMLElement | null = null;
   private timelineOriginalNextSibling: Node | null = null;
@@ -211,9 +250,9 @@ export class GalleryRoomView {
     zoomControls.setAttribute('role', 'group');
     zoomControls.setAttribute('aria-label', 'Zoom-Steuerung für den Fotoraum');
     this.zoomInButton = this.createControlButton('zoom-controls__btn', 'Vergrößern', '＋');
-    this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
+    this.zoomInButton.addEventListener('click', () => this.zoomBy(ZOOM_STEP_FACTOR));
     this.zoomOutButton = this.createControlButton('zoom-controls__btn', 'Verkleinern', '−');
-    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
+    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / ZOOM_STEP_FACTOR));
     this.resetButton = this.createControlButton(
       'zoom-controls__btn zoom-controls__btn--reset',
       'Fotoansicht zurücksetzen',
@@ -244,6 +283,7 @@ export class GalleryRoomView {
     status.setAttribute('aria-live', 'polite');
     this.status = status;
     root.append(scene, header, utilityControls, timelineHost, zoomControls, status);
+    this.zoomIndicator = new ZoomIndicator(root, 'gallery-room-view__zoom-indicator');
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -338,11 +378,15 @@ export class GalleryRoomView {
     this.element.hidden = !this.visible;
     this.element.setAttribute('aria-hidden', String(!this.visible));
     if (!this.visible) this.disableDeviceMotionTilt();
+    this.zoomIndicator.rebase();
     this.updateTimelinePlacement();
     this.onVisibilityChange(this.visible);
     if (this.visible) {
+      this.cachedViewport = null;
       this.status.textContent = '';
       this.resetCamera();
+      this.updateArtworkTransform();
+      this.preloadNeighborBackgrounds();
       this.closeButton.focus({ preventScroll: true });
     } else {
       this.pointers.clear();
@@ -354,6 +398,8 @@ export class GalleryRoomView {
     if (this.disposed) return;
     this.disposed = true;
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
+    if (this.cameraSettleTimer) window.clearTimeout(this.cameraSettleTimer);
+    this.zoomIndicator.dispose();
     this.disableDeviceMotionTilt();
     this.resizeObserver?.disconnect();
     window.removeEventListener('resize', this.handleResize);
@@ -424,29 +470,71 @@ export class GalleryRoomView {
     }
   }
 
-  private applyCamera(): void {
+  /**
+   * v1.44 — camera frames write a transform every rAF; reading
+   * `getBoundingClientRect()` right after that write forced a synchronous
+   * style/layout pass per frame. The size only changes on resize/visibility.
+   */
+  private viewportSize(): { width: number; height: number } {
+    if (this.cachedViewport) return this.cachedViewport;
     const rect = this.element.getBoundingClientRect();
+    const size = { width: rect.width, height: rect.height };
+    if (size.width > 0 && size.height > 0) this.cachedViewport = size;
+    return size;
+  }
+
+  private applyCamera(allowOverscroll = false): void {
+    const rect = this.viewportSize();
     const maxOffsetX = Math.max(0, rect.width * (this.cameraScale - 1));
     const maxOffsetY = Math.max(0, rect.height * (this.cameraScale - 1));
-    this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
-    this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
+    if (!allowOverscroll) {
+      this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
+      this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
+    }
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.zoomIndicator.report(this.cameraAnimationTargetScale ?? this.cameraScale);
+    this.markCameraMoving();
     this.syncPanCursor();
-    this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
-    this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
-    this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
-    this.resetButton.disabled = this.cameraScale === MIN_CAMERA_SCALE
+    const atMinimum = this.cameraScale <= MIN_CAMERA_SCALE;
+    const atMaximum = this.cameraScale >= MAX_CAMERA_SCALE;
+    const atRest = this.cameraScale === MIN_CAMERA_SCALE
       && this.cameraOffsetX === 0 && this.cameraOffsetY === 0;
-    this.updateArtworkTransform();
+    // Only touch the buttons when their state flips, not on every camera frame.
+    const controlState = `${atMinimum}|${atMaximum}|${atRest}`;
+    if (controlState !== this.cameraControlState) {
+      this.cameraControlState = controlState;
+      this.zoomOutButton.disabled = atMinimum;
+      this.zoomInButton.disabled = atMaximum;
+      this.resetButton.disabled = atRest;
+    }
+  }
+
+  /**
+   * v1.43 — while the camera moves the scene is its own compositor layer
+   * (`will-change: transform`), so each frame only re-composites instead of
+   * re-rastering and re-decoding the photo and the full-resolution artwork at
+   * every intermediate scale. Shortly after the last camera frame the hint is
+   * dropped and Chrome re-rasters once at the final, sharp scale.
+   */
+  private markCameraMoving(): void {
+    if (this.cameraSettleTimer) window.clearTimeout(this.cameraSettleTimer);
+    else this.scene.classList.add('is-camera-moving');
+    this.cameraSettleTimer = window.setTimeout(() => {
+      this.cameraSettleTimer = 0;
+      this.scene.classList.remove('is-camera-moving');
+    }, CAMERA_SETTLE_RASTER_MS);
   }
 
   private setCamera(
     scale: number,
     offsetX: number,
     offsetY: number,
-    syncAnimationState = true
+    syncAnimationState = true,
+    allowOverscroll = false
   ): void {
-    this.cameraScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    this.cameraScale = allowOverscroll
+      ? Math.max(0.5, scale)
+      : Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     this.cameraOffsetX = offsetX;
     this.cameraOffsetY = offsetY;
     if (syncAnimationState) {
@@ -454,7 +542,100 @@ export class GalleryRoomView {
       this.cameraPanX = this.cameraOffsetX;
       this.cameraPanY = this.cameraOffsetY;
     }
-    this.applyCamera();
+    this.applyCamera(allowOverscroll);
+  }
+
+  /** Pan limits for the current scale: offsets live in `[-max, 0]`. */
+  private panLimits(scale = this.cameraScale): { maxX: number; maxY: number } {
+    const rect = this.viewportSize();
+    return {
+      maxX: Math.max(0, rect.width * (scale - 1)),
+      maxY: Math.max(0, rect.height * (scale - 1)),
+    };
+  }
+
+  /**
+   * v1.41 — release physics shared with the interactive gallery: a flick
+   * keeps gliding and decays; a rubber-banded overscroll springs back.
+   * Reduced motion jumps straight to the clamped camera.
+   */
+  private startPanMomentum(velocityX: number, velocityY: number): void {
+    this.stopPanMomentum();
+    const { maxX, maxY } = this.panLimits();
+    const outOfBounds = this.cameraOffsetX > 0 || this.cameraOffsetX < -maxX
+      || this.cameraOffsetY > 0 || this.cameraOffsetY < -maxY;
+    const fast = Math.hypot(velocityX, velocityY) >= MIN_FLING_VELOCITY;
+    if (!outOfBounds && !fast) return;
+    if (isMotionReduced()) {
+      this.setCamera(this.cameraScale, this.cameraOffsetX, this.cameraOffsetY);
+      return;
+    }
+    let vx = fast ? velocityX : 0;
+    let vy = fast ? velocityY : 0;
+    let previousAt = performance.now();
+    const tick = (now: number): void => {
+      const dt = Math.max(0, Math.min(0.05, (now - previousAt) / 1000));
+      previousAt = now;
+      const limits = this.panLimits();
+      const stepX = stepMomentum({ position: this.cameraOffsetX, velocity: vx }, dt, -limits.maxX, 0);
+      const stepY = stepMomentum({ position: this.cameraOffsetY, velocity: vy }, dt, -limits.maxY, 0);
+      vx = stepX.velocity;
+      vy = stepY.velocity;
+      const settled = stepX.settled && stepY.settled;
+      this.setCamera(this.cameraScale, stepX.position, stepY.position, true, !settled);
+      this.momentumFrame = settled ? 0 : window.requestAnimationFrame(tick);
+    };
+    this.momentumFrame = window.requestAnimationFrame(tick);
+  }
+
+  private stopPanMomentum(): void {
+    if (this.momentumFrame) window.cancelAnimationFrame(this.momentumFrame);
+    this.momentumFrame = 0;
+  }
+
+  /** Double-tap: zoom in at the tapped point, or back to the fitted photo. */
+  private toggleZoomAt(point: PhotoPointer): void {
+    // The target decides, so a second double-click during the zoom-in returns.
+    if ((this.cameraAnimationTargetScale ?? this.cameraScale) > MIN_CAMERA_SCALE + 0.05) {
+      this.resetCamera(true);
+      return;
+    }
+    const contentX = (point.x - this.cameraOffsetX) / this.cameraScale;
+    const contentY = (point.y - this.cameraOffsetY) / this.cameraScale;
+    this.animateCamera(
+      DOUBLE_TAP_SCALE,
+      point.x - contentX * DOUBLE_TAP_SCALE,
+      point.y - contentY * DOUBLE_TAP_SCALE,
+      { x: contentX, y: contentY }
+    );
+  }
+
+  /** v1.45 — Shift+double-click: zoom out one double-click step at the pointer. */
+  private zoomOutStepAt(point: PhotoPointer): void {
+    const nextScale = (this.cameraAnimationTargetScale ?? this.cameraScale) / DOUBLE_TAP_SCALE;
+    if (nextScale <= MIN_CAMERA_SCALE + 0.05) {
+      this.resetCamera(true);
+      return;
+    }
+    const contentX = (point.x - this.cameraOffsetX) / this.cameraScale;
+    const contentY = (point.y - this.cameraOffsetY) / this.cameraScale;
+    this.animateCamera(
+      nextScale,
+      point.x - contentX * nextScale,
+      point.y - contentY * nextScale,
+      { x: contentX, y: contentY }
+    );
+  }
+
+  /** v1.45 — keyboard pan (Shift+arrows) of the zoomed photo; eased like other camera moves. */
+  private panBy(dx: number, dy: number): void {
+    const scale = this.cameraAnimationTargetScale ?? this.cameraScale;
+    if (scale <= MIN_CAMERA_SCALE + 0.001) return;
+    this.animateCamera(
+      scale,
+      (this.cameraAnimationTargetOffsetX ?? this.cameraOffsetX) + dx,
+      (this.cameraAnimationTargetOffsetY ?? this.cameraOffsetY) + dy
+    );
   }
 
   private zoomAt(scale: number, focusX: number, focusY: number): void {
@@ -466,7 +647,7 @@ export class GalleryRoomView {
   }
 
   private zoomBy(factor: number): void {
-    const rect = this.element.getBoundingClientRect();
+    const rect = this.viewportSize();
     const targetScale = Math.max(
       MIN_CAMERA_SCALE,
       Math.min(MAX_CAMERA_SCALE, (this.cameraAnimationTargetScale ?? this.cameraScale) * factor)
@@ -490,8 +671,10 @@ export class GalleryRoomView {
     offsetY: number,
     anchorContent?: PhotoPointer
   ): void {
+    // A release glide must not keep moving the camera under an eased zoom.
+    this.stopPanMomentum();
     const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
-    const rect = this.element.getBoundingClientRect();
+    const rect = this.viewportSize();
     const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));
     const maxOffsetY = Math.max(0, rect.height * (targetScale - 1));
     const targetOffsetX = Math.min(0, Math.max(-maxOffsetX, offsetX));
@@ -500,6 +683,19 @@ export class GalleryRoomView {
     this.cameraAnimationTargetOffsetX = targetOffsetX;
     this.cameraAnimationTargetOffsetY = targetOffsetY;
     this.syncPanCursor();
+    // v1.44 — without an explicit anchor (reset, double-click zoom-out) pan and
+    // scale used to ease independently: the faster pan reached offset 0 (the
+    // photo's left/top edge) while still zoomed in, so the zoom-out visibly
+    // drifted left. Zoom about the transform's fixed point instead — the photo
+    // point whose screen position is identical at start and target scale.
+    if (!anchorContent && Math.abs(this.cameraScale - targetScale) > 1e-3) {
+      const scaleDelta = this.cameraScale - targetScale;
+      const fixedX = (targetOffsetX - this.cameraOffsetX) / scaleDelta;
+      const fixedY = (targetOffsetY - this.cameraOffsetY) / scaleDelta;
+      if (Number.isFinite(fixedX) && Number.isFinite(fixedY)) {
+        anchorContent = { x: fixedX, y: fixedY };
+      }
+    }
     this.cameraAnimationAnchor = anchorContent
       ? {
           contentX: anchorContent.x,
@@ -543,7 +739,7 @@ export class GalleryRoomView {
           + (anchor.targetScreenX - anchor.startScreenX) * progress;
         const anchorScreenY = anchor.startScreenY
           + (anchor.targetScreenY - anchor.startScreenY) * progress;
-        const currentRect = this.element.getBoundingClientRect();
+        const currentRect = this.viewportSize();
         const currentMaxOffsetX = Math.max(0, currentRect.width * (nextScale - 1));
         const currentMaxOffsetY = Math.max(0, currentRect.height * (nextScale - 1));
         nextOffsetX = Math.min(0, Math.max(
@@ -591,6 +787,7 @@ export class GalleryRoomView {
   }
 
   private stopCameraAnimation(): void {
+    this.stopPanMomentum();
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     this.cameraAnimationFrame = 0;
     this.cameraAnimationTargetScale = null;
@@ -603,7 +800,9 @@ export class GalleryRoomView {
   }
 
   private handleResize = (): void => {
+    this.cachedViewport = null;
     this.applyCamera();
+    this.updateArtworkTransform();
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
@@ -646,9 +845,12 @@ export class GalleryRoomView {
   private onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     this.stopCameraAnimation();
-    this.resetArtworkInteraction();
+    this.lastPointerType = event.pointerType;
+    if (!this.motionTiltEnabled) this.resetArtworkInteraction();
     const point = this.pointerPosition(event);
     this.pointers.set(event.pointerId, point);
+    this.velocity.reset();
+    this.velocity.add(event.timeStamp, point.x, point.y);
     this.pointerDragStarted = false;
     this.scene.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -668,11 +870,34 @@ export class GalleryRoomView {
     const points = [...this.pointers.entries()];
     if (this.gesture?.kind === 'pan' && points.length === 1 && points[0]![0] === this.gesture.pointerId) {
       const point = points[0]![1];
-      this.pointerDragStarted ||= point.x !== this.gesture.startX || point.y !== this.gesture.startY;
+      this.velocity.add(event.timeStamp, point.x, point.y);
+      const slop = event.pointerType === 'mouse' ? 0 : undefined;
+      this.pointerDragStarted ||= exceedsTapSlop(point.x - this.gesture.startX, point.y - this.gesture.startY, slop);
+      if (!this.pointerDragStarted) return;
+      if (this.isRoomSwipeAvailable(event.pointerType)) {
+        // v1.46 (C2): at the fitted zoom a touch drag carries the whole room;
+        // toward a missing neighbour (first/last room) it rubber-bands.
+        const dx = point.x - this.gesture.startX;
+        const followX = this.neighborView(dx < 0 ? 1 : -1)
+          ? dx
+          : rubberBandClamp(dx, 0, 0, this.element.clientWidth);
+        this.setCamera(
+          this.cameraScale,
+          followX,
+          rubberBandClamp(point.y - this.gesture.startY, 0, 0, this.element.clientHeight),
+          true,
+          true
+        );
+        return;
+      }
+      // Content follows the finger 1:1; past the photo edge it rubber-bands.
+      const { maxX, maxY } = this.panLimits();
       this.setCamera(
         this.cameraScale,
-        this.gesture.offsetX + point.x - this.gesture.startX,
-        this.gesture.offsetY + point.y - this.gesture.startY
+        rubberBandClamp(this.gesture.offsetX + point.x - this.gesture.startX, -maxX, 0, this.element.clientWidth),
+        rubberBandClamp(this.gesture.offsetY + point.y - this.gesture.startY, -maxY, 0, this.element.clientHeight),
+        true,
+        true
       );
       return;
     }
@@ -681,19 +906,103 @@ export class GalleryRoomView {
       const second = points[1]![1];
       const center = pointerCenter(first, second);
       const distance = Math.max(1, pointerDistance(first, second));
-      const scale = this.gesture.scale * distance / this.gesture.distance;
+      const rawScale = this.gesture.scale * distance / this.gesture.distance;
+      // Soft resistance past the zoom limits; springs back on release.
+      const scale = rawScale < MIN_CAMERA_SCALE
+        ? MIN_CAMERA_SCALE * Math.pow(rawScale / MIN_CAMERA_SCALE, 0.35)
+        : rawScale > MAX_CAMERA_SCALE
+          ? MAX_CAMERA_SCALE * Math.pow(rawScale / MAX_CAMERA_SCALE, 0.35)
+          : rawScale;
       const contentX = (this.gesture.centerX - this.gesture.offsetX) / this.gesture.scale;
       const contentY = (this.gesture.centerY - this.gesture.offsetY) / this.gesture.scale;
-      this.setCamera(scale, center.x - contentX * scale, center.y - contentY * scale);
+      this.pointerDragStarted = true;
+      this.setCamera(scale, center.x - contentX * scale, center.y - contentY * scale, true, true);
     }
   };
 
   private onPointerEnd = (event: PointerEvent): void => {
-    if (!this.pointers.delete(event.pointerId)) return;
+    const endPoint = this.pointers.get(event.pointerId);
+    if (!endPoint || !this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
+    const gesture = this.gesture;
+    const dragged = this.pointerDragStarted;
     this.pointerDragStarted = false;
+    if (gesture?.kind === 'pinch') {
+      // Settle any zoom overscroll around the pinch centre, then keep the
+      // remaining finger from jumping the camera.
+      const clamped = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, this.cameraScale));
+      const center = this.pointers.size > 0 ? [...this.pointers.values()][0]! : endPoint;
+      const contentX = (center.x - this.cameraOffsetX) / this.cameraScale;
+      const contentY = (center.y - this.cameraOffsetY) / this.cameraScale;
+      if (clamped !== this.cameraScale) {
+        this.animateCamera(clamped, center.x - contentX * clamped, center.y - contentY * clamped, {
+          x: contentX,
+          y: contentY,
+        });
+      } else {
+        this.startPanMomentum(0, 0);
+      }
+    } else if (gesture?.kind === 'pan' && event.type === 'pointerup') {
+      if (dragged && this.isRoomSwipeAvailable(event.pointerType)) {
+        const velocity = this.velocity.velocity(event.timeStamp);
+        this.finishRoomSwipe(endPoint.x - gesture.startX, endPoint.y - gesture.startY, velocity.x);
+      } else if (dragged) {
+        const velocity = this.velocity.velocity(event.timeStamp);
+        this.startPanMomentum(velocity.x, velocity.y);
+      } else if (event.pointerType !== 'mouse' && this.doubleTap.tap(event.timeStamp, endPoint.x, endPoint.y)) {
+        this.toggleZoomAt(endPoint);
+      }
+    } else if (gesture?.kind === 'pan') {
+      this.startPanMomentum(0, 0);
+    }
     this.beginGesture();
   };
+
+  /**
+   * v1.46 (C2): phones and tablets swipe between photo rooms at the fitted
+   * zoom with the gallery's swipe rule; the dropdown stays for desktop and
+   * screen readers. Zoomed in, a drag pans the photo instead.
+   */
+  private isRoomSwipeAvailable(pointerType: string): boolean {
+    return pointerType === 'touch'
+      && this.views.length > 1
+      && Math.max(this.cameraScale, this.cameraAnimationTargetScale ?? MIN_CAMERA_SCALE) <= MIN_CAMERA_SCALE + 0.001;
+  }
+
+  private neighborView(direction: -1 | 1): GalleryRoomViewConfig | null {
+    const index = this.activeView ? this.views.indexOf(this.activeView) : -1;
+    if (index < 0) return null;
+    return this.views[index + direction] ?? null;
+  }
+
+  private finishRoomSwipe(dx: number, dy: number, velocityX: number): void {
+    const direction = resolveSwipeDirection(dx, dy, velocityX);
+    const next = direction === 0 ? null : this.neighborView(direction);
+    if (!next) {
+      this.startPanMomentum(0, 0); // springs back to the fitted room
+      return;
+    }
+    // The next room enters from the side the finger pulled it from and
+    // glides to rest with the shared camera easing (composite-only).
+    const width = this.viewportSize().width;
+    this.setCamera(MIN_CAMERA_SCALE, this.cameraOffsetX + direction * width, 0, true, true);
+    this.setView(next.id);
+    this.preloadNeighborBackgrounds();
+  }
+
+  /** Warms the neighbouring room photos so a swipe does not reveal a blank room. */
+  private preloadNeighborBackgrounds(): void {
+    for (const direction of [-1, 1] as const) {
+      const view = this.neighborView(direction);
+      if (!view) continue;
+      const src = resolveBackgroundUrl(view.background.src);
+      if (this.preloadedBackgrounds.has(src)) continue;
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = src;
+      this.preloadedBackgrounds.set(src, image);
+    }
+  }
 
   private beginGesture(): void {
     const entries = [...this.pointers.entries()];
@@ -734,7 +1043,7 @@ export class GalleryRoomView {
     this.scene.classList.toggle('is-dragging', canPan && this.pointerDragStarted);
   }
 
-  private pointerPosition(event: PointerEvent): PhotoPointer {
+  private pointerPosition(event: MouseEvent): PhotoPointer {
     const rect = this.element.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
@@ -845,6 +1154,7 @@ export class GalleryRoomView {
     this.motionNeutral = null;
     this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
     this.motionTiltTarget = { tiltX: 0, tiltY: 0 };
+    this.scene.classList.remove('is-sensor-tilt');
     this.motionToggleButton.setAttribute('aria-pressed', 'false');
     this.motionToggleButton.setAttribute('aria-label', 'Bewegungssteuerung aktivieren');
     this.resetArtworkInteraction();
@@ -866,23 +1176,37 @@ export class GalleryRoomView {
   }
 
   private onDeviceOrientation = (event: DeviceOrientationEvent): void => {
-    if (!this.motionTiltEnabled || this.pointers.size > 0) return;
+    if (!this.motionTiltEnabled) return;
     if (this.isReducedMotion()) {
       this.disableDeviceMotionTilt();
       return;
     }
     if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+    const now = performance.now();
     if (!this.motionNeutral) {
       this.motionNeutral = { x: event.beta!, y: event.gamma! };
+      this.motionNeutralAt = now;
+      this.scene.classList.add('is-sensor-tilt');
       return;
     }
+    // Slowly re-centre so a phone held at a new angle drifts back to neutral.
+    const drifted = driftDeviceNeutral(
+      { beta: this.motionNeutral.x, gamma: this.motionNeutral.y },
+      { beta: event.beta!, gamma: event.gamma! },
+      (now - this.motionNeutralAt) / 1000
+    );
+    this.motionNeutral = { x: drifted.beta, y: drifted.gamma };
+    this.motionNeutralAt = now;
     const screenAngle = window.screen.orientation?.angle ?? 0;
     this.motionTiltTarget = normalizeDeviceArtworkTilt(
       event.beta!,
       event.gamma!,
       screenAngle,
       this.motionNeutral.x,
-      this.motionNeutral.y
+      this.motionNeutral.y,
+      SENSOR_TILT_RANGE_DEG,
+      SENSOR_TILT_MAX_DEG,
+      SENSOR_TILT_DEAD_ZONE_DEG
     );
     if (!this.motionTiltFrame) {
       this.motionTiltLastFrameAt = performance.now();
@@ -920,6 +1244,7 @@ export class GalleryRoomView {
       if (this.motionTiltFrame) window.cancelAnimationFrame(this.motionTiltFrame);
       this.motionTiltFrame = 0;
       this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
+      this.scene.classList.remove('is-sensor-tilt');
       this.resetArtworkInteraction();
       return;
     }
@@ -944,11 +1269,16 @@ export class GalleryRoomView {
 
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    this.zoomBy(Math.exp(-event.deltaY * 0.001));
+    this.zoomBy(wheelZoomFactor(normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight), event.ctrlKey));
   };
 
-  private onDoubleClick = (): void => {
-    this.resetCamera(true);
+  private onDoubleClick = (event: MouseEvent): void => {
+    // Touch double-taps are handled in onPointerEnd (zoom at the point).
+    if (this.lastPointerType === 'touch' || this.lastPointerType === 'pen') return;
+    // v1.43 — like the gallery: zoom in at the pointer, again to return.
+    event.preventDefault();
+    if (event.shiftKey) this.zoomOutStepAt(this.pointerPosition(event));
+    else this.toggleZoomAt(this.pointerPosition(event));
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -962,17 +1292,32 @@ export class GalleryRoomView {
     }
     if (event.key === '+' || event.key === '=') {
       event.preventDefault();
-      this.zoomBy(1.25);
+      this.zoomBy(ZOOM_STEP_FACTOR);
     } else if (event.key === '-') {
       event.preventDefault();
-      this.zoomBy(1 / 1.25);
+      this.zoomBy(1 / ZOOM_STEP_FACTOR);
     } else if (event.key === '0' || event.key === 'Home') {
       event.preventDefault();
       this.resetCamera(true);
+    } else if (event.shiftKey && event.key.startsWith('Arrow') && !this.isFormControl(event.target)) {
+      event.preventDefault();
+      const { width, height } = this.viewportSize();
+      const stepX = width * KEYBOARD_PAN_SHARE;
+      const stepY = height * KEYBOARD_PAN_SHARE;
+      // The arrow names the direction the view moves, so the photo shifts the other way.
+      if (event.key === 'ArrowLeft') this.panBy(stepX, 0);
+      else if (event.key === 'ArrowRight') this.panBy(-stepX, 0);
+      else if (event.key === 'ArrowUp') this.panBy(0, stepY);
+      else if (event.key === 'ArrowDown') this.panBy(0, -stepY);
     } else if (event.key === 'Tab') {
       this.trapFocus(event);
     }
   };
+
+  private isFormControl(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA');
+  }
 
   private trapFocus(event: KeyboardEvent): void {
     const focusable = [...this.element.querySelectorAll<HTMLElement>(

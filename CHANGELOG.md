@@ -1,5 +1,236 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+
+## Unreleased — v1.46 next development round (2026-10-22)
+
+- **Merge readiness (docs):** every Markdown file re-audited against the
+  v1.46 code; README, ARCHITECTURE_MAP, DEPLOYMENT and IMAGE_MAINTENANCE_GUIDE
+  describe the new modules, WebP delivery and links; `npm test` joined the
+  validation baselines (CONTRIBUTING, DOCUMENTATION_RULES, AI_RULES); the
+  finished v1.45/v1.46 plan and handoff sections moved to `docs/archive/`
+  (`*-2026-10-22-v1.46.md`) with open items carried forward. Full double-check
+  passed: lint, typecheck, build, `npm test`, frame budget, museum-hub,
+  deploy, local-project and WebGL-resilience checks.
+- **Shareable artwork links:** `?artwork=<id>` preselects an artwork in the
+  museum hub, `&view=gallery` opens it in the gallery after Start. While
+  visiting, the address follows the current artwork, so copying the URL shares
+  exactly what is on screen. Unknown or malformed IDs are ignored
+  (`docs/QUERY_PARAMETERS.md`, `npm run test:deep-links`). The artwork
+  information has a "Link teilen" button on the website: phones open the
+  system share sheet, other browsers copy the link ("Link kopiert"). The
+  local `file://` preview has no shareable address and shows no button.
+- **CI runs the pure checks:** `npm test` now runs all no-browser checks
+  (quality CI already called it, but the script did not exist). This exposed
+  and fixed a stale `test:gallery-room-view` source check from the lazy
+  editor change.
+- **Zoom readout:** zooming in the gallery or the photo room briefly shows the
+  zoom level ("125 %", 100 % = fitted view) at the top and announces the
+  settled value once to screen readers.
+- **Gallery zoom no longer slides sideways:** after a double-click zoom near an
+  edge, "reset" (button, `0`, second double-click) used to glide toward the
+  centre before shrinking, because pan eased faster than zoom. Zoom moves now
+  ease pan and zoom together, so the view shrinks about one fixed point — the
+  same fix the photo room got in v1.44.
+- **Smaller deployed download:** `public/customer-artworks.js` no longer
+  carries base64 copies of every original (70.8 MB → 19 KB). The local
+  `file://` preview keeps its embedded fallback
+  (`customer-preview/customer-artworks.js`); the deployed site loads files.
+  `validate:deploy` fails above 2 MiB or on embedded image bytes.
+- **Responsive images:** `import:artworks` (npm/CI) writes WebP versions at
+  640/1280/2048/≤4096 px into `public/web-images/` (sharp, cached in
+  `node_modules/.cache`). Phones and devices with ≤4 GB memory use 2048 px,
+  others up to 4096 px; the timeline uses the 640 px version. Hub, gallery
+  and photo room share one URL, so each image downloads once (same-origin
+  textures no longer use a separate CORS request). Per visit: 166.7 MB →
+  19.9 MB (desktop) / 18.6 MB (phone). The customer's "Update Gallery"
+  (plain Node) is unchanged.
+- **Phone immersive view:** on phones, a single tap on the artwork hides the
+  top bar, timeline, arrows and info sheet together, and the artwork grows
+  into the freed space (660 → 844 px tall on a 390×844 phone). Another tap,
+  keyboard focus on the controls, opening the photo room or leaving the
+  gallery brings them back. Double tap still zooms; a tap that only closes
+  the phone menu or settings does not hide anything.
+- **Phones in landscape:** the timeline becomes a slim rail on the right,
+  the utilities move into the phone menu, the floating arrows and zoom
+  buttons give way to swipe and pinch, and the tap-to-hide view works here
+  too. The artwork area on an 844×390 phone grows from 118 px to 334 px tall.
+- **Background photos as WebP:** the museum hub photo and the four room
+  photos are served as same-size WebP copies (hub 11.2 MB → 176 KB, no
+  visible difference; calibration unchanged). Per visit now about 6.0 MB
+  (desktop) / 4.8 MB (phone). `validate:deploy` checks these files too.
+- **Editor out of the visitor bundle:** the placement-editor UI classes load
+  as a separate chunk only when the editor opens (74 KB less for visitors).
+  `test:frame-budget` now also enforces a visitor entry budget and checks
+  that editor-only code stays out of it.
+- **Phone info sheet:** three stops — peek (title only), half (default) and
+  full — using the shared snap physics; scrolling inside the sheet no longer
+  moves the page.
+- **Photo room on phones:** swipe left/right at the fitted zoom to change
+  rooms (the next room glides in; the first/last room springs back). The
+  room dropdown stays for desktop and screen readers.
+- **Tests:** `test:mobile-browser` covers the sheet stops and the room swipe;
+  `test:touch-gestures` covers `resolveSheetStop`; `test:validate-deploy`
+  covers the manifest budget and web-image files (15 checks);
+  `test:editor-rooms` now reads the configured photo-room count (it still
+  expected 2 of the 4 rooms).
+
+## Unreleased — v1.45 handoff implementation (2026-10-22)
+
+- **One zoom curve for gallery and photo room:** wheel notches, zoom buttons
+  and `+`/`-` keys now multiply the magnification by the same factor in both
+  views (`wheelZoomFactor`, `ZOOM_STEP_FACTOR` = 1.25 in
+  `src/interaction/touchGestures.ts`). The gallery used to add a constant
+  camera distance, so its zoom accelerated near the artwork (~7 % per notch
+  at the fitted view, ~29 % close up) while the room used ~10.5 %; both now
+  zoom ~12.7 % per 100 px notch. `GalleryManager.addZoomDelta` was replaced by
+  `zoomByFactor`.
+- **Trackpad pinch gain:** ctrl+wheel (trackpad pinch) zooms 2.5× more per
+  delta in both views, so pinching feels as direct as on touch.
+- **Photo room:** Shift+double-click zooms out one double-click step at the
+  pointer; Shift+arrow keys pan the zoomed photo (eased, 15 % of the view per
+  press). Help lists both.
+- **Hub panorama accessibility:** a polite live region announces
+  "Bild 3 von 4: <Titel>" once the strip settles on an artwork.
+- **Tooling:** `npm run measure:room-zoom` traces raster, paint, decode, style
+  and layout work for wheel, button, double-click and reset zooms in both
+  views (baseline in `FINDINGS.md`).
+- **Tests:** the phone suite's strip-reach check polls the end state instead
+  of trusting a 1 s stability window (headless rAF starvation, lesson 132);
+  `test:touch-gestures` sweeps artwork spans at five phone sizes to prove
+  every side-wall artwork can be fully framed; new zoom-curve, Shift+arrow,
+  Shift+double-click and announcement checks.
+  The photo-room browser suite now uses the shared `WHEEL_ZOOM_PER_PX` rate
+  (it still expected the old 0.001), guarded by a static check (lesson 133).
+- **Docs:** stale `validate:museum-hub` failure note in `docs/HANDOFF.md`
+  marked superseded; v1.43–v1.45 starting points merged.
+- **Handoff completion audit:** every `docs/HANDOFF.md` item was checked
+  against code and tests. Finished follow-ups were removed and listed under
+  "Done since the previous handoff"; the remaining gates are one "Open items"
+  list. Old validation history and audit matrices moved to
+  `docs/archive/handoff-history-2026-10-22.md`; finished v1.41–v1.44 and
+  2026-10-18…20 plans moved to `docs/archive/plan-history-2026-10-22.md`, with
+  duplicated owner/customer gates consolidated in `plan.md`.
+
+## Unreleased — v1.44 photo-room zoom-out drift (2026-10-21)
+
+- **Zoom-out no longer drifts left:** a second double-click (and the reset
+  button/key) zoomed out with pan and scale eased separately; the faster pan
+  reached the photo's left/top edge while still zoomed in, so the view slid
+  sideways before shrinking. Every un-anchored camera animation now scales
+  about its fixed point (the photo point whose screen position is the same at
+  start and target), so zoom-out is a straight, centred shrink.
+- **Fewer forced layouts per camera frame:** the photo-room viewport size is
+  cached between resizes; camera frames no longer call
+  `getBoundingClientRect()` two to three times right after writing the
+  transform (each read forced a synchronous style/layout pass).
+- **No per-frame button writes:** zoom/reset `disabled` states are written only
+  when they change.
+- **Browser suite:** asserts the double-click zoom-out keeps its fixed photo
+  point still on every frame (< 2 px); the slow headless reset after the
+  edge-zoom check now has the same 60 s budget as other camera waits.
+
+## Unreleased — v1.43 desktop photo-room zoom (2026-10-21)
+
+- **Double-click in the photo room** zooms in at the pointer (2.5×) and a second
+  double-click returns to the whole photo, like the gallery (previously it only
+  reset). The decision uses the zoom target, so double-clicking during the
+  zoom-in returns. Help in both views now lists double-click.
+- **Smoother desktop zoom:** while the camera moves the photo scene gets
+  `will-change: transform` (`.is-camera-moving`), so frames are composited
+  instead of re-rastering/re-decoding the photo and full-resolution artwork at
+  every intermediate scale (headless trace of a 6-notch wheel zoom: ~515–538 →
+  ~80 raster tasks). 160 ms after the last camera frame the hint is dropped and
+  the final scale re-rasters sharply once.
+- **Less work per camera frame:** the artwork homography (camera-independent)
+  and its layout read no longer run on every frame, and an unused
+  `--artwork-zoom` style write was removed; projection now refreshes on
+  open, resize, room and artwork changes.
+- **Wheel deltas normalised** (`normalizeWheelDelta`, shared by gallery and
+  photo room): line- and page-mode wheels (e.g. Firefox line scrolling) zoom
+  like pixel-mode wheels instead of 16–800× slower; extreme events are capped.
+- **Trackpad pinch in the gallery** (ctrl+wheel) no longer also zooms the
+  browser page: the canvas wheel listener is non-passive and prevents only
+  ctrl+wheel (the photo room already did).
+- **Docs fix:** the customer guide said wheel zoom follows the pointer; it
+  recentres on the artwork (README and tests already said so).
+
+## Unreleased — v1.42 mobile follow-ups (2026-10-21)
+
+- **Phone "more" menu** (`src/ui/PhoneUtilityMenu.ts`): on touch phones
+  (≤599 px, coarse pointer) audio, settings, fullscreen and help collapse
+  behind one topbar **⋯** button (in the photo room inside its utility group).
+  One placement function in `main.ts` owns where the shared controls live.
+  Gallery chrome at 390×844 drops from 27.5 % to 19 % of the screen height.
+- **Info bottom sheet:** the compact phone info panel rises from below with a
+  grab handle; tap or pull up to expand (it stays pinned open), pull down to
+  collapse and again to dismiss. Release decisions use `resolveSheetRelease`
+  in the shared gesture engine; `ChromeVisibilityManager` gained
+  `setPinned`/`dismiss`.
+- **Fix:** on touch devices the info panel stayed invisible even when revealed
+  (a later `[data-hover='false']` rule with equal specificity forced
+  `opacity: 0`), so **Info** and the edge tap showed nothing on phones.
+- **Reduced motion wins over gyro tilt:** a manual "on" no longer overrides
+  reduced motion (setting or system); the toggle shows as unavailable and the
+  stored choice resumes when reduced motion is turned off.
+- **Artwork space:** phone nav arrows no longer reserve artwork space while
+  auto-hidden, keyed to the chrome mode instead of the momentary opacity; the
+  artwork refits when **Bedienleiste immer einblenden** changes.
+- **Photo-room zoom cap kept at 6×:** zoom inspects the separately loaded
+  full-resolution artwork image, not the ~2K background, so a background-
+  resolution cap (~1.4× on desktop) would remove useful detail.
+- **Tests:** new `npm run test:mobile-browser` (phone panorama, strip, drag
+  safety, theme-color, chrome coverage, menu, info sheet); the museum-hub
+  geometry suite passes again (curated customer values checked as tolerances).
+- **Merge readiness:** the in-app reduced-motion setting also stops the phone
+  menu's pop-in animation (previously only the system setting did). The
+  photo-room browser suite's pan drag now holds still before release so the
+  release physics do not read the synthetic drag as a fling (the off-centre
+  wheel-zoom path check had failed reproducibly with ~125 px deviation), and
+  its utility-return check accepts the v1.42 phone menu as the gallery home
+  of the shared controls on touch phones.
+
+## v1.41 mobile experience overhaul (2026-10-21)
+
+- **Shared touch physics** (`src/interaction/touchGestures.ts`): velocity
+  tracking, frame-rate-independent momentum, rubber-band edges, soft snapping,
+  tap slop, double tap and an optional Android vibration tick. Gallery, photo
+  room and museum hub now use the same feel; reduced motion removes glide and
+  springs but keeps direct finger control.
+- **Gallery touch:** one-finger pan follows the finger 1:1 at every zoom
+  (world-per-pixel from the camera), pinch is multiplicative and anchored
+  between the fingers, release glides with momentum, double-tap zooms in at
+  the tapped point and back to fit, and overview swipes preview the drag and
+  accept fast flicks.
+- **Gyro tilt in the gallery:** a new `DeviceTiltController` feeds phone
+  orientation into the existing clamped hover tilt of the 3D artwork. Android
+  enables it automatically on touch devices; iOS asks once after a tap when the
+  new **Kunstwerk mit dem Handy neigen** setting is on. Dead zone, slow neutral drift and
+  screen-angle handling keep it calm. Persisted as `deviceTilt` in the
+  preferences key documented in `docs/QUERY_PARAMETERS.md`.
+- **Photo room:** pan momentum and rubber band, pinch overscroll spring-back,
+  touch double-tap zoom (×2.5 at the tapped point / reset) and a visible sensor
+  tilt (up to 3.5°) without the 1.1 s CSS transition lag. Wheel and buttons keep
+  the existing artwork-centred easing.
+- **Museum hub on phones:** artworks are never hidden by wall group any more
+  (`is-off-wall` removed), so every visible artwork is tappable. Narrow portrait
+  shows one continuous, height-fitted panorama: drag 1:1, flick, soft snap to
+  artworks, rubber band at the photo edges, edge pull to change room, no
+  accidental opening after a drag, and fully off-screen artworks leave the tab
+  order. A synced artwork strip (tap = glide and select, second tap = open)
+  replaces the three fixed wall views; the pager is a compact room indicator.
+- **Phone layout:** slimmer timeline (84×54 px items), zoom buttons hidden on
+  coarse-pointer phones (pinch/double-tap replace them), a one-row photo-room
+  header that fits 320 px screens, and `dvh`/safe-area sizing in the panorama.
+- **Loading colour:** one `--loading-accent` token (museum wall grey) replaces
+  the gold→blue gradient; every page declares `theme-color`, which is dark while
+  the loading overlay is visible and returns to the wall grey afterwards.
+- **Fix:** wheel/button zoom in the photo room stops a running pan glide so
+  the eased zoom keeps its straight path toward the artwork.
+- **Tests:** new `npm run test:touch-gestures`; the photo-room browser suite
+  now passes end to end (headless-tolerant waits for terminal zoom and edge
+  spring-back); photo-room browser checks cover
+  the sensor-tilt class/bound and the narrow header; the museum-hub suite checks
+  the slim phone timeline.
 
 ## Unreleased — pan-aware cursors and consistent interaction help (2026-10-20)
 

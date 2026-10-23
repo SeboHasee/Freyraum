@@ -33,6 +33,12 @@ export class PreferencesPanel {
   private audioVolumeInput: HTMLInputElement | null = null;
   private audioValueLabel: HTMLElement | null = null;
   private audioStatusEl: HTMLElement | null = null;
+  private tiltRow: HTMLElement | null = null;
+  private tiltInput: HTMLInputElement | null = null;
+  private tiltDesc: HTMLElement | null = null;
+  private tiltHandler: ((enabled: boolean) => void) | null = null;
+  private tiltEffective: () => boolean = () => false;
+  private tiltBlocked: () => boolean = () => false;
 
   // ── Drag-continuity guard (v0.20.2 / v0.20.3 Slice B) ────────────────────
   // While the user is actively dragging the volume slider we suppress the
@@ -142,6 +148,14 @@ export class PreferencesPanel {
           <span class="prefs__toggle-desc">Zeitleiste und Werkinformationen dauerhaft anzeigen.</span>
         </span>
       </label>
+      <label class="prefs__toggle" id="freyraum-tilt-row" hidden>
+        <input type="checkbox" id="freyraum-tilt" />
+        <span class="prefs__toggle-track" aria-hidden="true"></span>
+        <span class="prefs__toggle-label">
+          <span class="prefs__toggle-title">Kunstwerk mit dem Handy neigen</span>
+          <span class="prefs__toggle-desc">Bewegungssensor kippt das Werk sanft im Licht.</span>
+        </span>
+      </label>
       <h2 class="prefs__heading">Hintergrundmusik</h2>
       <label class="prefs__toggle">
         <input type="checkbox" id="freyraum-audio-muted" ${audioMuted ? 'checked' : ''} />
@@ -181,6 +195,9 @@ export class PreferencesPanel {
     this.audioVolumeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-volume');
     this.audioValueLabel = this.panel.querySelector<HTMLElement>('#freyraum-audio-volume-label');
     this.audioStatusEl = this.panel.querySelector<HTMLElement>('#freyraum-audio-status');
+    this.tiltRow = this.panel.querySelector<HTMLElement>('#freyraum-tilt-row');
+    this.tiltInput = this.panel.querySelector<HTMLInputElement>('#freyraum-tilt');
+    this.tiltDesc = this.tiltRow?.querySelector<HTMLElement>('.prefs__toggle-desc') ?? null;
 
     this.bindPanelEvents();
   }
@@ -194,6 +211,12 @@ export class PreferencesPanel {
 
     this.contrastInput?.addEventListener('change', (e) => {
       this.prefs.setContrastMode((e.target as HTMLInputElement).checked ? 'high' : 'auto');
+    });
+
+    // The handler runs synchronously inside the change event so iOS accepts
+    // the motion-permission request as user-initiated.
+    this.tiltInput?.addEventListener('change', (e) => {
+      this.tiltHandler?.((e.target as HTMLInputElement).checked);
     });
 
     this.chromeInput?.addEventListener('change', (e) => {
@@ -262,6 +285,7 @@ export class PreferencesPanel {
     if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
     if (this.chromeInput) this.chromeInput.checked = alwaysShowChrome;
     if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
+    this.refreshDeviceTilt();
 
     // Do not patch slider value during active pointer drag (Slice B continuity fix).
     if (!this.isVolumeDragging && this.audioVolumeInput && this.audioValueLabel) {
@@ -287,6 +311,37 @@ export class PreferencesPanel {
       input.checked = input.value === quality;
     });
 
+  }
+
+  /**
+   * v1.41 — shows the motion-sensor tilt toggle on supported devices.
+   * `isEffective` reports the live on/off state; `onChange` must request
+   * sensor permission synchronously from the user gesture.
+   */
+  configureDeviceTilt(
+    onChange: (enabled: boolean) => void,
+    isEffective: () => boolean,
+    isBlocked: () => boolean = () => false
+  ): void {
+    this.tiltHandler = onChange;
+    this.tiltEffective = isEffective;
+    this.tiltBlocked = isBlocked;
+    if (this.tiltRow) this.tiltRow.hidden = false;
+    this.refreshDeviceTilt();
+  }
+
+  refreshDeviceTilt(): void {
+    if (!this.tiltInput) return;
+    // Reduced motion suppresses sensor tilt; show the toggle as unavailable.
+    const blocked = this.tiltBlocked();
+    this.tiltInput.checked = !blocked && this.tiltEffective();
+    this.tiltInput.disabled = blocked;
+    this.tiltRow?.classList.toggle('is-disabled', blocked);
+    if (this.tiltDesc) {
+      this.tiltDesc.textContent = blocked
+        ? 'Bei reduzierter Bewegung ausgeschaltet.'
+        : 'Bewegungssensor kippt das Werk sanft im Licht.';
+    }
   }
 
   setAudioStatusMessage(message: string | null): void {

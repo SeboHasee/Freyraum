@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,62 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Download size and bundle budgets (added 2026-10-22, v1.46)
+
+- `npm run validate:deploy` (deploy workflow, before the build): fails when
+  `public/customer-artworks.js` is over 2 MiB or embeds image bytes
+  (`webglImage`, `data:image/`), or when a listed `web-images/*.webp` file is
+  missing; warns when the web image map is absent (sharp not installed).
+  Fixture tests: `npm run test:validate-deploy`.
+- `npm run test:frame-budget` (CI, after `npm run build`): the visitor entry
+  chunk `dist/assets/main-*.js` must stay ≤ 1.15 MB, an `editorModules-*.js`
+  chunk must exist, and editor-only class names must not appear in the entry.
+- Byte measurements per visit are manual (served `dist/` at `/Freyraum/`,
+  Playwright `request.sizes()`); record before/after in `FINDINGS.md`.
+
+## Zoom work measurement (added 2026-10-22, v1.45)
+
+After `npm run build`: `FREYRAUM_CHROME_PATH=/path/to/chrome npm run measure:room-zoom`
+(optional `FREYRAUM_MEASURE_URL`, `FREYRAUM_MEASURE_JSON`). Traces raster,
+paint, image decode, style recalculation and layout for wheel (×6 in/out),
+button, reset and double-click zooms in the gallery and the photo room and
+prints a table. It measures work, not frame rate (lesson 130); compare runs on
+the same machine. It does not assert; record before/after in `FINDINGS.md`.
+
+## Phone browser suite (added 2026-10-21, v1.42)
+
+After `npm run import:artworks && npm run build`:
+`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:mobile-browser`
+(optional `FREYRAUM_MOBILE_URL`, `FREYRAUM_MOBILE_CAPTURE_DIR`). With Chrome
+mobile + touch emulation at 390×844, 360×780 and 844×390 it checks the
+`theme-color` meta, panorama only on narrow portrait, every strip entry
+gliding its artwork fully on screen and tappable at its centre, finger drags
+panning without opening, gallery chrome ≤ 24 % of the height with
+non-overlapping controls, the phone "more" menu (44 px targets, settings on
+screen, outside-tap close) and the info sheet (visible on touch, expand,
+pinned past auto-hide, collapse, swipe away). Since v1.45 it also checks the
+strip announcement ("Bild N von N") and polls strip reach until the glide has
+arrived (lesson 132). Since v1.46 the 390×844 pass checks the info-sheet stops
+(full → half → peek → away, peek smaller than half with the title visible,
+`overscroll-behavior: contain`) and the photo-room swipe (next room, back, and
+spring-back at the first room). About 5–10 min headless; run
+it alone. Real-device feel is still manual.
+
+## Mobile touch, gyro and hub panorama (added 2026-10-21)
+
+`npm run test:touch-gestures` (no browser) checks the shared gesture physics
+(velocity window, rubber band, frame-rate-independent momentum, soft snapping,
+tap slop, swipe resolution, double tap, anchored zoom), the hub panorama math
+(pan limits, strip ↔ pan round trip, edge room step) and device-orientation
+helpers (dead zone, saturation, screen rotation, neutral drift across ±180°).
+The photo-room browser suite asserts the sensor-tilt bound (≤ 3.5°) and the
+`is-sensor-tilt` class, and checks the one-row phone header stays on screen at
+320×568. Under headless SwiftShader the terminal 6× zoom step may need tens of
+seconds because rAF is starved; its wait allows 90 s, and the edge test waits
+for the spring-back to reach the photo edge. Stop stray headless Chrome
+processes between runs. The full suite passed on 2026-10-21. Real-device feel (iOS
+Safari, Android Chrome) is not covered by automation.
 
 ## Pan-aware cursors and interaction help (updated 2026-10-20)
 
@@ -58,6 +114,14 @@ path toward the reachable viewport center; each frame derives pan from the same
 scene-space anchor, subject to the zoomed-photo bounds. Pinch and pan remain
 direct, including during edge-limited zoom, and responsive resize and reduced
 motion remain covered.
+Since v1.43 it also checks the mouse double-click toggle (zoom in at the
+pointer with the clicked photo point kept under it, then back to the whole
+photo) — since v1.44 every zoom-out frame must keep the transform's fixed
+photo point within 2 px (no sideways drift) — and that `.is-camera-moving` (`will-change: transform`) is present
+while the camera animates and removed after it settles.
+Synthetic mouse drags hold still for 250 ms before release: CDP delivers
+press/move/release within milliseconds, which the release physics would read
+as a fling and glide to the photo edge (lesson 129). Run this suite alone.
 The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
 waits for two animation frames after a viewport or room-state change so the photo
 and artwork have been painted before manual visual review.
@@ -329,7 +393,11 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
-| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
+| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, touch flick momentum to the pan limit, zoom readout (room + gallery), keyboard, close/focus | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | – |
+| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | – |
+| `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
+| `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, tap-to-hide immersive view, info sheet stops, photo-room swipe, landscape gallery rail | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
@@ -338,6 +406,11 @@ Linux run them under `xvfb-run -a`.
 | `npm run smoke:desktop-package -- --exe <app>` | Electron | the **packaged** app: bundled importer, editor, save label, layout unchanged | desktop (Windows unpacked + installed) |
 | `npm run test:deploy-smoke -- <url>` | yes | a deployed gallery: rooms, artworks, background, no 404s | deploy (`smoke` job) |
 | `npm run validate:visual` / `validate:museum-hub:visual` | yes | Type A screenshots against a local baseline | – |
+
+`npm test` runs every no-browser check (`test:front-wall-aspect`,
+`test:gallery-room-view`, `test:touch-gestures`, `test:deep-links`,
+`test:save-service`, `test:validate-deploy`); quality CI calls it after the
+build. Add new pure checks to that script so CI runs them.
 
 Workflows: `quality-and-doc-drift.yml` (every pull request and `main`),
 `deploy-pages.yml` (`main` → GitHub Pages, then smoke), `desktop-release.yml`

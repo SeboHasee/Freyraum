@@ -248,6 +248,12 @@ canvas {
   user-select: none;
 }
 
+// v1.43 — composite-only camera frames while zooming/panning; removed after
+// the camera settles so the final scale re-rasters sharply (GalleryRoomView).
+.gallery-room-view__scene.is-camera-moving {
+  will-change: transform;
+}
+
 canvas.gallery-canvas.is-fine-pointer.is-pan-available,
 .gallery-room-view__scene.is-fine-pointer.is-pan-available {
   cursor: grab;
@@ -303,7 +309,6 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
     filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
   --artwork-tilt-x: 0deg;
   --artwork-tilt-y: 0deg;
-  --artwork-zoom: 1;
 }
 
 .gallery-room-view__utilities {
@@ -412,6 +417,12 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   transform: none;
 }
 
+// v1.41: sensor tilt is smoothed in JS every frame; a CSS transform
+// transition on top restarts on each update and lags ~1 s behind the phone.
+.gallery-room-view__scene.is-sensor-tilt .gallery-room-view__artwork {
+  transition: filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
 .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
   transform:
@@ -444,23 +455,49 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   display: none;
 }
 
+// v1.41 — phone portrait: back button and room selector share one compact
+// row; the utilities sit right below it instead of a 124 px stacked header.
 @media (max-width: 599px) {
   .gallery-room-view__header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
+    top: calc(var(--safe-top) + 10px);
+    left: calc(var(--safe-left) + 10px);
+    max-width: calc(100vw - var(--safe-left) - var(--safe-right) - 20px);
+    min-width: 0;
+  }
+
+  .gallery-room-view__room-controls {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .gallery-room-view__select {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .gallery-room-view__utilities {
-    top: calc(var(--safe-top) + 124px);
+    top: calc(var(--safe-top) + 62px);
   }
 
   .gallery-room-view__room-controls {
     min-height: 44px;
+    gap: 4px;
+    padding: 2px 5px 2px 8px;
+  }
+
+  .gallery-room-view__room-label {
+    display: none;
+  }
+
+  .gallery-room-view__back {
+    padding: 0 10px;
   }
 
   .gallery-room-view__select {
-    max-width: min(190px, calc(100vw - 90px));
+    max-width: 100%;
   }
 
   .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
@@ -1014,12 +1051,153 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   display: none;
 }
 
-.museum-hub__artwork.is-off-wall {
-  visibility: hidden;
-  pointer-events: none;
+// v1.41: the artwork centred by the phone-panorama strip shows the same
+// marker as keyboard focus. Artworks are never hidden by wall group.
+.museum-hub__artwork.is-strip-focus::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
-// ── Pager (room pages + narrow wall-focus views) ────────────────────────────
+// ── Phone panorama (narrow portrait visitor mode, v1.41) ─────────────────────
+// The photograph is sized by the available height so artworks are large
+// enough to see and tap; one JS-driven horizontal camera (--hub-pan-x) moves
+// it under the finger. dvh follows the mobile browser bars.
+
+.museum-hub.is-panorama {
+  --hub-pano-top: calc(var(--safe-top) + 84px);
+  --hub-pano-bottom: calc(var(--safe-bottom) + 96px);
+  --hub-strip-bottom: calc(var(--safe-bottom) + 12px);
+  touch-action: none;
+
+  &.has-pager {
+    --hub-pano-bottom: calc(var(--safe-bottom) + 150px);
+    --hub-strip-bottom: calc(var(--safe-bottom) + 64px);
+  }
+  overscroll-behavior: contain;
+
+  .museum-hub__visual {
+    top: var(--hub-pano-top);
+    width: calc((100vh - var(--hub-pano-top) - var(--hub-pano-bottom)) * var(--hub-aspect));
+    width: calc((100dvh - var(--hub-pano-top) - var(--hub-pano-bottom)) * var(--hub-aspect));
+    height: calc(100vh - var(--hub-pano-top) - var(--hub-pano-bottom));
+    height: calc(100dvh - var(--hub-pano-top) - var(--hub-pano-bottom));
+    transform: translateX(-50%) translate3d(var(--hub-pan-x, 0px), 0, 0);
+    transition: none;
+    will-change: transform;
+  }
+
+  .museum-hub__header {
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 16px);
+    right: calc(var(--safe-right) + 16px);
+  }
+
+  .museum-hub__eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.62rem;
+  }
+
+  .museum-hub__title {
+    font-size: 1.55rem;
+  }
+
+  .museum-hub__introduction {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    transition: opacity var(--dur-control) var(--ease-out);
+  }
+
+  &.has-panned .museum-hub__introduction {
+    opacity: 0;
+  }
+
+  .museum-hub__pager {
+    bottom: calc(var(--safe-bottom) + 10px);
+    gap: 4px;
+    padding: 2px 6px;
+  }
+
+  .museum-hub__artwork {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  &.is-panning .museum-hub__artwork {
+    cursor: grabbing;
+  }
+}
+
+.museum-hub__strip {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: var(--hub-strip-bottom, calc(var(--safe-bottom) + 64px));
+  height: 76px;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.museum-hub__strip[hidden] {
+  display: none;
+}
+
+.museum-hub__strip-track {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+.museum-hub__strip-item {
+  display: flex;
+  flex: 0 0 76px;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus-visible {
+    outline: none;
+
+    .museum-hub__strip-thumb {
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 6px rgba(15, 20, 24, 0.6);
+    }
+  }
+}
+
+.museum-hub__strip-thumb {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background-color: rgba(10, 14, 17, 0.5);
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  opacity: 0.72;
+  transform: scale(0.88);
+  transition:
+    transform var(--dur-control) var(--ease-out),
+    opacity var(--dur-control) var(--ease-out),
+    box-shadow var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__strip-item.is-centered .museum-hub__strip-thumb {
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px #ffe7a4, 0 4px 16px rgba(0, 0, 0, 0.36);
+}
+
+// ── Pager (rooms) ────────────────────────────────────────────────────────────
 
 .museum-hub__pager {
   position: absolute;
@@ -1766,7 +1944,8 @@ body.placement-editor {
   // Volume, settings, and fullscreen icons would cover the editor fields.
   .audio-controls,
   .prefs,
-  .fullscreen-btn {
+  .fullscreen-btn,
+  .phone-menu {
     display: none !important;
   }
 
@@ -2804,7 +2983,8 @@ body.placement-editor {
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
   .museum-hub__artwork,
-  .museum-hub__artwork-label {
+  .museum-hub__artwork-label,
+  .museum-hub__strip-thumb {
     transition: none;
   }
 }
@@ -2819,7 +2999,8 @@ body.placement-editor {
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
   .museum-hub__artwork,
-  .museum-hub__artwork-label {
+  .museum-hub__artwork-label,
+  .museum-hub__strip-thumb {
     transition: none;
   }
 }
@@ -2974,6 +3155,8 @@ button {
   max-height: 32vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  // v1.46 (C1): scrolling inside the sheet never chains to the page (iOS).
+  overscroll-behavior: contain;
   pointer-events: auto;
 
   .info-panel__title {
@@ -2985,6 +3168,65 @@ button {
     // Allow scroll inside the panel rather than truncating, so all
     // information remains accessible (WCAG SC 1.4.10 Reflow).
     margin-bottom: 8px;
+  }
+
+  // v1.42 — bottom sheet: pull the handle up to read more, down to close.
+  transition: opacity var(--dur-content) var(--ease-gallery-out),
+    transform var(--dur-content) var(--ease-gallery-out),
+    max-height var(--dur-content) var(--ease-gallery-out);
+
+  &.is-expanded {
+    max-height: min(68vh, calc(100dvh - var(--chrome-bottom) - 80px - var(--safe-top) - 88px));
+  }
+
+  // v1.46 (C1): peek stop shows only the handle, eyebrow and title.
+  &.is-peek {
+    max-height: var(--sheet-peek-height, 7.5rem);
+    overflow-y: hidden;
+  }
+
+  &.is-dragging {
+    max-height: var(--sheet-drag-height, 32vh) !important; // the sheet follows the finger
+    overflow-y: hidden;
+    transform: translateY(var(--sheet-drag, 0px)) !important; // finger wins over reveal transforms
+    transition: none !important;
+  }
+}
+
+.info-panel__handle {
+  display: none;
+}
+
+.info-panel--compact .info-panel__handle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% + 36px);
+  height: 30px;
+  margin: -14px -18px 2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: currentColor;
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px var(--focus-ring);
   }
 }
 
@@ -3034,6 +3276,40 @@ button {
   text-transform: uppercase;
   color: var(--text-muted);
   opacity: 0.7;
+}
+
+.info-panel__share {
+  // The desktop panel lets pointer events reach the canvas; the button opts in.
+  pointer-events: auto;
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent, currentColor);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+
+  &[hidden] {
+    display: none;
+  }
 }
 
 // =============================================================================
@@ -3151,6 +3427,52 @@ button {
   border-radius: var(--radius-md);
   padding: 8px;
   box-shadow: var(--shadow-soft);
+}
+
+.zoom-indicator {
+  position: fixed;
+  top: calc(var(--chrome-top) + 8px);
+  left: 50%;
+  z-index: 101;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% -4px;
+  transition: opacity var(--dur-fast) var(--ease-out), translate var(--dur-fast) var(--ease-out);
+}
+
+.zoom-indicator.is-visible {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+.zoom-indicator__badge {
+  display: inline-block;
+  min-width: 4.5em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.gallery-room-view .zoom-indicator.gallery-room-view__zoom-indicator {
+  position: absolute;
+  top: calc(var(--safe-top) + 72px);
+  z-index: 1002;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zoom-indicator,
+  .zoom-indicator.is-visible {
+    translate: -50% 0;
+  }
 }
 
 .zoom-controls__btn {
@@ -3520,6 +3842,15 @@ button {
   &:nth-of-type(2) {
     margin-top: 18px;
   }
+}
+
+.prefs__toggle.is-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.prefs__toggle[hidden] {
+  display: none;
 }
 
 .prefs__toggle {
@@ -4010,6 +4341,10 @@ button {
 // Loading overlay
 // =============================================================================
 .loading-overlay {
+  // v1.41: one loading accent derived from the museum wall colour (the colour
+  // the visitor sees right after loading) instead of a gold→blue gradient.
+  --loading-accent: var(--color-gallery-wall, #c7ced4);
+  --loading-accent-soft: rgba(199, 206, 212, 0.14);
   position: fixed;
   inset: 0;
   background: #0d0d0e;
@@ -4082,7 +4417,7 @@ button {
   width: 0%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #b59a6a, #c8d6e5);
+  background: var(--loading-accent);
   transition: width 260ms var(--ease-out);
 }
 
@@ -4103,7 +4438,7 @@ button {
 .loading-start-btn {
   margin-top: 2rem;
   padding: 0.9rem 2.4rem;
-  border: 1.5px solid #b59a6a;
+  border: 1.5px solid var(--loading-accent);
   border-radius: 4px;
   background: transparent;
   color: #f0eae0;
@@ -4131,11 +4466,11 @@ button {
   }
 
   &:not(:disabled):hover {
-    background: rgba(181, 154, 106, 0.12);
+    background: var(--loading-accent-soft);
   }
 
   &:focus-visible {
-    outline: 2px solid #b59a6a;
+    outline: 2px solid var(--loading-accent);
     outline-offset: 3px;
   }
 
@@ -4436,7 +4771,8 @@ button {
     transition-duration: 0.001ms;
   }
 
-  .prefs__panel {
+  .prefs__panel,
+  .phone-menu__panel {
     animation: none;
   }
 
@@ -4517,6 +4853,23 @@ button {
   // Compact (phone-portrait) info panel becomes scrollable when revealed.
   .info-panel--compact.is-revealed {
     pointer-events: auto;
+  }
+
+  // v1.42 — the phone info sheet rises from below instead of the left edge.
+  .info-panel.info-panel--compact {
+    transform: translateY(32px);
+  }
+
+  .info-panel.info-panel--compact.is-revealed:not(.is-transitioning) {
+    transform: translateY(0);
+  }
+
+  // v1.46 (C1): the sheet glides between its peek, half and full stops.
+  .info-panel.info-panel--compact.is-revealed {
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      max-height var(--dur-content) var(--ease-gallery-out);
   }
 
   // Preserve the navigation content-swap fade (`.is-transitioning`, added by
@@ -4713,8 +5066,10 @@ button {
 }
 
 // Touch users reveal the info panel by tapping its left-edge peek strip.
+// v1.42 — only the unrevealed panel: this rule shares the reveal rules'
+// specificity and comes later, so it used to keep the Info sheet invisible.
 :root[data-hover='false'][data-chrome-mode='clean'] {
-  .info-panel {
+  .info-panel:not(.is-revealed) {
     opacity: 0;
     pointer-events: none;
   }
@@ -4851,9 +5206,165 @@ button {
     --audio-ctrl-right: calc(126px + var(--safe-right));
   }
 
+  // v1.41 — slim phone timeline (≈80 px instead of ≈120 px) so the artwork
+  // gets the screen; thumbnails stay ≥44 px tall touch targets.
+  :root {
+    --chrome-bottom: max(112px, calc(100px + var(--safe-bottom)));
+  }
+
+  .timeline {
+    bottom: calc(10px + var(--safe-bottom));
+    width: calc(100vw - 20px - var(--safe-left) - var(--safe-right));
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 18px;
+  }
+
+  .timeline__list {
+    gap: 8px;
+    padding: 6px 4px 4px;
+  }
+
   .timeline__item {
-    flex-basis: 120px;
-    height: 76px;
+    flex-basis: 84px;
+    height: 54px;
+  }
+
+  .timeline__thumb {
+    border-radius: 10px;
+  }
+
+  .timeline__thumb-subtitle {
+    display: none;
+  }
+
+  .timeline__thumb-label {
+    bottom: 4px;
+    padding: 10px 6px 0;
+    font-size: 10px;
+  }
+
+  .timeline__arrow {
+    width: 32px;
+    height: 44px;
+    font-size: 22px;
+  }
+
+  .timeline__counter {
+    display: none;
+  }
+
+  .nav-controls {
+    bottom: calc(112px + var(--safe-bottom));
+  }
+}
+
+// v1.41 — touch phones: pinch, double-tap and swipe replace the floating
+// zoom buttons. "Bedienleiste immer einblenden" brings them back for
+// users who prefer buttons.
+@media (max-width: 599px) and (pointer: coarse) {
+  :root:not([data-chrome-mode='visible']) .zoom-controls:not(.gallery-room-view__zoom-controls) {
+    display: none;
+  }
+}
+
+// v1.46 — phone immersive view (single tap on the artwork): topbar, timeline,
+// nav and info sheet leave together; `translate` keeps their own transforms.
+// Opacity/translate only, so layout rects stay valid for the artwork refit.
+.topbar,
+.timeline {
+  transition-property: opacity, translate, visibility;
+  transition-duration: 0.28s;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root[data-phone-immersive='true'] {
+  .topbar,
+  .timeline,
+  .nav-controls,
+  .info-panel,
+  .info-panel-peek,
+  .info-panel-chevron {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .topbar {
+    translate: 0 -12px;
+  }
+
+  .timeline {
+    translate: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .timeline {
+    transition-duration: 0.001ms;
+  }
+}
+
+// v1.46 (C3) — touch phones in landscape: the timeline becomes a vertical rail
+// on the right so the artwork keeps the full height; the swipe replaces the
+// floating arrows. `Timeline.ts` follows the list's flex direction.
+@media (max-height: 499px) and (pointer: coarse) and (orientation: landscape) {
+  :root {
+    --chrome-top: calc(48px + var(--safe-top));
+    --chrome-bottom: calc(8px + var(--safe-bottom));
+  }
+
+  :root:not([data-chrome-mode='visible']) .zoom-controls:not(.gallery-room-view__zoom-controls) {
+    display: none;
+  }
+
+  .timeline:not(.gallery-room-view__timeline) {
+    top: calc(56px + var(--safe-top));
+    bottom: calc(8px + var(--safe-bottom));
+    left: auto;
+    right: calc(8px + var(--safe-right));
+    transform: none;
+    width: 92px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 18px;
+
+    .timeline__list {
+      flex-direction: column;
+      justify-content: flex-start;
+      width: 100%;
+      height: 0;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scroll-snap-type: y proximity;
+      scroll-padding-block: 8px;
+      padding: 4px 2px;
+      gap: 8px;
+    }
+
+    .timeline__item {
+      flex: 0 0 56px;
+      width: 100%;
+      height: 56px;
+      scroll-margin-block: 8px;
+    }
+
+    .timeline__thumb-label,
+    .timeline__arrow,
+    .timeline__counter {
+      display: none;
+    }
+  }
+
+  :root[data-phone-immersive='true'] .timeline:not(.gallery-room-view__timeline) {
+    translate: 12px 0;
+  }
+
+  :root:not([data-chrome-mode='visible']) .nav-controls {
+    display: none;
   }
 }
 
@@ -4969,6 +5480,12 @@ button {
 .hint-text,
 .loading-overlay {
   contain: layout paint;
+}
+
+// v1.42 — the phone "more" popover hangs below the topbar; paint
+// containment would clip it.
+.topbar.topbar--has-menu {
+  contain: layout;
 }
 
 // Keep nav and prefs containers out of paint containment:
@@ -5102,7 +5619,8 @@ button {
 // to visually "pop" above the topbar line. 2026 best practice: use background
 // + shadow elevation for hover (environmental affordance); reserve scale-down
 // (0.94) for active/press to give tactile feedback only.
-.topbar__help-btn {
+.topbar__help-btn,
+.phone-menu__toggle {
   position: relative;
   width: 44px;
   height: 44px;
@@ -5145,6 +5663,82 @@ button {
   &:focus-visible {
     outline: none;
     box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+  }
+}
+
+// =============================================================================
+// v1.42 — phone "more" menu: audio, settings, fullscreen and help collapse
+// behind one topbar button on touch phones (placed by main.ts) instead of a
+// second floating row over the artwork. The popover reuses the controls'
+// own glass styles; the settings panel anchors to the popover's right edge.
+// =============================================================================
+.phone-menu {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.phone-menu__toggle {
+  .phone-menu.is-open & {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+  }
+}
+
+.phone-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--shadow-medium);
+  transform-origin: top right;
+  animation: prefs-in var(--dur-panel) var(--ease-gallery-out);
+
+  &[hidden] {
+    display: none;
+  }
+
+  .audio-controls,
+  .fullscreen-btn {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    box-shadow: none;
+  }
+
+  .fullscreen-btn {
+    flex: 0 0 44px;
+  }
+
+  // Static so the settings panel positions against the popover, never
+  // past the left screen edge.
+  .prefs--embedded {
+    position: static;
+    inset: auto;
+    z-index: auto;
+  }
+
+  // Opens below topbar + popover row (~140 px), so it needs more headroom
+  // than the desktop panel's 120 px.
+  .prefs__panel {
+    top: calc(100% + 8px);
+    right: 0;
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 168px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-menu__panel {
+    animation: none;
   }
 }
 

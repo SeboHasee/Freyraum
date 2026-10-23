@@ -13,11 +13,15 @@ import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
 import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessResult } from './gallery/GalleryManager';
 import { GalleryRoomView } from './gallery/GalleryRoomView';
+import { DeviceTiltController } from './gallery/DeviceTiltController';
 import { Topbar } from './ui/Topbar';
+import { PhoneUtilityMenu } from './ui/PhoneUtilityMenu';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
 import { HintText } from './ui/HintText';
 import { ZoomControls } from './ui/ZoomControls';
+import { ZoomIndicator } from './ui/ZoomIndicator';
+import { shareLink, shareLinkFeedback } from './ui/shareLink';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
 import { ChromeVisibilityManager } from './ui/ChromeVisibilityManager';
@@ -39,7 +43,13 @@ import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
-import { resolveArtworkImageSources } from './utils/artworkImageSources';
+import {
+  applyWebImages,
+  resolveArtworkImageSources,
+  sanitizeWebImageMap,
+  webImageDisplayLongEdge,
+} from './utils/artworkImageSources';
+import { setWebBackgroundMap } from './utils/webBackgrounds';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 import {
@@ -49,6 +59,7 @@ import {
   type StartupReadinessMode,
 } from './config/startup';
 import { installHiddenEditorEntry } from './online/hiddenEditorEntry';
+import { buildArtworkDeepLinkSearch, readArtworkDeepLink } from './navigation/deepLink';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
@@ -94,6 +105,9 @@ interface LoadingOverlayControls {
  * contain wrappers such as `max(...)`, `calc(...)`, or `env(...)`; invalid
  * values fall back to 0.
  */
+/** v1.46 — phone immersive chrome slide (matches `main.scss`) plus margin. */
+const PHONE_IMMERSIVE_SETTLE_MS = 340;
+
 function parseCssNumeric(value: string): number {
   const parsed = Number.parseFloat(value);
   if (Number.isFinite(parsed)) return parsed;
@@ -599,6 +613,25 @@ function verifyMuseumWallColorConsistency(
   }
 }
 
+/**
+ * v1.41 — mobile browser UI (address bar, Android page-load line) follows the
+ * dark loading overlay, then the museum wall once the overlay leaves.
+ */
+function setBrowserThemeColor(color: string): void {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = color;
+}
+
+function restoreWallThemeColor(): void {
+  const wall = getComputedStyle(document.documentElement).getPropertyValue('--color-gallery-wall').trim();
+  setBrowserThemeColor(wall || '#c7ced4');
+}
+
 function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   const placementEditor = isPlacementEditorRequested();
   const hints = [
@@ -610,6 +643,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   ];
   const overlay = document.createElement('div');
   overlay.className = 'loading-overlay';
+  setBrowserThemeColor('#0d0d0e');
   overlay.setAttribute('role', 'status');
   overlay.setAttribute('aria-live', 'polite');
   overlay.setAttribute('aria-label', 'Museum wird geladen');
@@ -744,6 +778,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
           startButton.removeEventListener('click', go);
           document.removeEventListener('keydown', onKey);
           overlay.classList.add('is-hidden');
+          restoreWallThemeColor();
           window.setTimeout(() => {
             overlay.remove();
             resolve();
@@ -834,7 +869,29 @@ async function main(): Promise<void> {
     injectedLegacyArtworks,
     diagnostics
   );
-  const customerArtworks = injectedArtworkPayload?.artworks ?? null;
+  // v1.46 (B2): the deployed manifest adds WebP size variants. One display
+  // size per device keeps hub, gallery and photo room on a single download.
+  const webImageMap = sanitizeWebImageMap(
+    (window as unknown as { __FREYRAUM_WEB_IMAGES?: unknown }).__FREYRAUM_WEB_IMAGES
+  );
+  const webImageLongEdge = webImageDisplayLongEdge({
+    layoutTier: initialCaps.layoutTier,
+    pointerPrimary: initialCaps.pointerPrimary,
+    deviceMemoryGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null,
+  });
+  const customerArtworks = injectedArtworkPayload
+    ? applyWebImages(injectedArtworkPayload.artworks, webImageMap, webImageLongEdge)
+    : null;
+  const webBackgroundCount = setWebBackgroundMap(
+    (window as unknown as { __FREYRAUM_WEB_BACKGROUNDS?: unknown }).__FREYRAUM_WEB_BACKGROUNDS
+  );
+  if (webImageMap.size > 0 || webBackgroundCount > 0) {
+    diagnostics.info('boot', 'artworks-web-images', 'Using deployed web image variants', {
+      artworks: webImageMap.size,
+      backgrounds: webBackgroundCount,
+      displayLongEdge: webImageLongEdge,
+    });
+  }
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
   recoveryArtworks = artworks;
@@ -952,6 +1009,7 @@ async function main(): Promise<void> {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
     loadingOverlay.overlay.remove();
+    restoreWallThemeColor();
     showFallbackScreen(app, {
       category: 'renderer-initialization',
       reason: err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
@@ -1075,6 +1133,11 @@ async function main(): Promise<void> {
     infoPanel: null,
   };
 
+  // v1.46 (C3) — touch phones in landscape share the phone chrome (utility
+  // menu, immersive tap, tap-revealed arrows) with portrait phones.
+  const phoneTouchQuery = window.matchMedia?.(
+    '(max-width: 599px) and (pointer: coarse), (max-height: 499px) and (pointer: coarse) and (orientation: landscape)'
+  );
   const measureArtworkViewport = (): ArtworkViewportMetrics => {
     const visualViewport = window.visualViewport;
     const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
@@ -1085,21 +1148,41 @@ async function main(): Promise<void> {
     const chromeTop = parseCssNumeric(rootStyle.getPropertyValue('--chrome-top'));
     const chromeBottom = parseCssNumeric(rootStyle.getPropertyValue('--chrome-bottom'));
 
-    const topbarRect = chromeRefs.topbar?.getBoundingClientRect();
-    const timelineRect = chromeRefs.timeline?.getBoundingClientRect();
+    // v1.46 — phone immersive view: the hidden topbar and timeline free the
+    // screen, so only the safe areas are reserved.
+    const immersive = document.documentElement.dataset['phoneImmersive'] === 'true';
+    const topbarRect = immersive ? undefined : chromeRefs.topbar?.getBoundingClientRect();
+    const timelineRect = immersive ? undefined : chromeRefs.timeline?.getBoundingClientRect();
     const navRect = chromeRefs.navControls?.getBoundingClientRect();
 
     // Clamp to the visible viewport so a stale/transitioning fixed header rect
     // cannot make the usable-artwork area negative during mobile chrome changes.
     const topbarOcclusion = topbarRect ? Math.max(0, Math.min(viewportH, topbarRect.bottom)) : 0;
-    const bottomOcclusion = [timelineRect, navRect]
+    // v1.41: on touch phones the auto-hidden nav arrows overlay the artwork
+    // only briefly; reserving their band would shrink the artwork for good.
+    // Keyed to the chrome mode, not the current opacity, so a resize during a
+    // forced reveal cannot leave the artwork shrunk until the next resize.
+    const navOcclusionRect = phoneTouchQuery?.matches
+      && document.documentElement.dataset['chromeMode'] !== 'visible'
+      ? undefined
+      : navRect;
+    // v1.46 (C3) — the landscape side rail occludes the right edge instead.
+    const timelineIsRail = !!timelineRect && timelineRect.height > timelineRect.width;
+    const railOcclusion = timelineIsRail && timelineRect
+      ? Math.max(0, Math.min(viewportW, viewportW - timelineRect.left))
+      : 0;
+    const bottomOcclusion = [timelineIsRail ? undefined : timelineRect, navOcclusionRect]
       .filter((rect): rect is DOMRect => !!rect)
       .reduce((max, rect) => Math.max(max, viewportH - Math.max(0, rect.top)), 0);
 
-    const occlusionTop = Math.max(chromeTop, topbarOcclusion);
-    const occlusionBottom = Math.max(chromeBottom, bottomOcclusion);
+    const occlusionTop = immersive
+      ? parseCssNumeric(rootStyle.getPropertyValue('--safe-top'))
+      : Math.max(chromeTop, topbarOcclusion);
+    const occlusionBottom = immersive
+      ? Math.max(parseCssNumeric(rootStyle.getPropertyValue('--safe-bottom')), bottomOcclusion)
+      : Math.max(chromeBottom, bottomOcclusion);
     const occlusionLeft = safeLeft;
-    const occlusionRight = safeRight;
+    const occlusionRight = Math.max(safeRight, railOcclusion);
     const usableW = Math.max(1, viewportW - occlusionLeft - occlusionRight);
     const usableH = Math.max(1, viewportH - occlusionTop - occlusionBottom);
 
@@ -1189,13 +1272,139 @@ async function main(): Promise<void> {
   applyCompactInfo(initialCaps.layoutTier);
   const navControls = new NavigationControls(app);
   const zoomControls = new ZoomControls(app, galleryManager);
+  const galleryZoomIndicator = new ZoomIndicator(app);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
+  // v1.41 — motion-sensor tilt for the interactive gallery. The unit tilt is
+  // mapped through the existing hover-rotation scale (which grows with zoom)
+  // and GalleryManager's stage-clearance clamp, so the artwork never clips the
+  // wall. Android enables it automatically on touch devices; iOS needs the
+  // settings toggle (or a stored "on" choice) to request permission from a tap.
+  const DEVICE_TILT_GAIN = 2.4;
+  let galleryInteractive = false;
+  const deviceTilt = new DeviceTiltController((x, y) => {
+    const scale = galleryManager.getHoverRotationScale();
+    galleryManager.setHoverTarget(x * scale.x * DEVICE_TILT_GAIN, y * scale.y * DEVICE_TILT_GAIN);
+  });
+  const deviceTiltSupported =
+    DeviceTiltController.isSupported() && initialCaps.pointerPrimary === 'coarse';
+  const deviceTiltWanted = (): boolean => {
+    // Reduced motion (setting or system) always wins, matching the photo
+    // room; a stored "on" choice resumes once reduced motion is turned off.
+    const { deviceTilt: mode, reducedMotion } = preferences.current;
+    if (reducedMotion || mode === 'off') return false;
+    if (mode === 'on') return true;
+    return !DeviceTiltController.needsPermission();
+  };
+  const syncDeviceTiltActive = (): void => {
+    deviceTilt.setActive(galleryInteractive && !galleryRoomView?.isVisible);
+  };
+  const enableDeviceTilt = (): void => {
+    void deviceTilt.enable().then((access) => {
+      preferencesPanel.refreshDeviceTilt();
+      if (access !== 'granted') {
+        diagnostics.info('interaction', 'device-tilt-unavailable', 'Motion-sensor tilt not available', { access });
+      }
+    });
+  };
+  if (deviceTiltSupported) {
+    preferencesPanel.configureDeviceTilt((enabled) => {
+      preferences.setDeviceTilt(enabled ? 'on' : 'off');
+      if (enabled && deviceTiltWanted()) enableDeviceTilt();
+      else deviceTilt.disable();
+      preferencesPanel.refreshDeviceTilt();
+    }, () => deviceTilt.isEnabled, () => preferences.current.reducedMotion);
+    // A stored "on" choice on iOS still needs a fresh user activation.
+    const onFirstTiltGesture = (): void => {
+      if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
+      window.removeEventListener('touchend', onFirstTiltGesture);
+      enableDeviceTilt();
+    };
+    const resumeDeviceTilt = (): void => {
+      if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
+      if (DeviceTiltController.needsPermission()) {
+        window.addEventListener('touchend', onFirstTiltGesture, { passive: true });
+      } else {
+        enableDeviceTilt();
+      }
+    };
+    resumeDeviceTilt();
+    preferences.subscribe(() => {
+      if (!deviceTiltWanted() && deviceTilt.isEnabled) deviceTilt.disable();
+      else resumeDeviceTilt();
+      preferencesPanel.refreshDeviceTilt();
+    });
+  }
   // v0.20.5 — subtle main-page audio controls (mute/volume, top-right cluster).
   // Hidden when no audio source exists.
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  // v1.42 — audio, settings, fullscreen and help are shared by the gallery,
+  // the photo room and (on touch phones) the "more" menu; one function owns
+  // where they live so the three placements can never disagree.
+  const phoneUtilityMenu = new PhoneUtilityMenu();
+  let roomUtilitiesVisible = false;
+  const placeUtilityControls = (): void => {
+    const utilities = [
+      audioControls.element,
+      preferencesPanel.element,
+      fullscreenButton.element,
+      topbar.helpBtn,
+    ];
+    const phone = !!phoneTouchQuery?.matches;
+    if (phone) {
+      phoneUtilityMenu.setControls(utilities);
+    } else {
+      phoneUtilityMenu.setOpen(false);
+      phoneUtilityMenu.element.remove();
+    }
+    if (roomUtilitiesVisible) {
+      galleryRoomView?.setUtilityControls(phone ? [phoneUtilityMenu.element] : utilities);
+      preferencesPanel.setEmbedded(true);
+    } else if (phone) {
+      topbar.setUtilityMenu(phoneUtilityMenu.element);
+      preferencesPanel.setEmbedded(true);
+    } else {
+      app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
+      topbar.restoreHelpButton();
+      preferencesPanel.setEmbedded(false);
+    }
+  };
+  // v1.46 — phone immersive view: a single tap on the artwork hides the
+  // topbar, timeline, nav and info sheet together and the artwork refits to
+  // the freed screen (the zoom glides through the normal smoothing); another
+  // tap, focus moving into the chrome, or leaving the gallery restores them.
+  let immersiveRefitTimer: ReturnType<typeof setTimeout> | null = null;
+  const isPhoneImmersive = (): boolean => document.documentElement.dataset['phoneImmersive'] === 'true';
+  const setPhoneImmersive = (requested: boolean): void => {
+    const immersive = requested
+      && !!phoneTouchQuery?.matches
+      && galleryInteractive
+      && !roomUtilitiesVisible
+      && document.documentElement.dataset['chromeMode'] !== 'visible';
+    if (immersive === isPhoneImmersive()) return;
+    if (immersive) {
+      document.documentElement.dataset['phoneImmersive'] = 'true';
+      phoneUtilityMenu.setOpen(false);
+      chromeVisibility.dismiss('info-panel');
+    } else {
+      delete document.documentElement.dataset['phoneImmersive'];
+    }
+    galleryManager.handleViewportMetricsChanged();
+    galleryZoomIndicator.rebase();
+    // The chrome slides back in; measure again once its transition settled.
+    if (immersiveRefitTimer !== null) clearTimeout(immersiveRefitTimer);
+    immersiveRefitTimer = setTimeout(() => {
+      immersiveRefitTimer = null;
+      galleryManager.handleViewportMetricsChanged();
+      galleryZoomIndicator.rebase();
+    }, PHONE_IMMERSIVE_SETTLE_MS);
+    diagnostics.info('interaction', 'phone-immersive', immersive ? 'Phone chrome hidden' : 'Phone chrome shown', {
+      immersive,
+    });
+  };
+
   galleryRoomView = new GalleryRoomView(
     app,
     museumHubResolution.galleryRoomViews,
@@ -1205,23 +1414,16 @@ async function main(): Promise<void> {
     },
     (visible) => {
       topbar.setRoomViewActive(visible);
-      const roomUtilities = [
-        audioControls.element,
-        preferencesPanel.element,
-        fullscreenButton.element,
-        topbar.helpBtn,
-      ];
-      if (visible) {
-        galleryRoomView?.setUtilityControls(roomUtilities);
-        preferencesPanel.setEmbedded(true);
-      } else {
-        app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
-        topbar.restoreHelpButton();
-        preferencesPanel.setEmbedded(false);
-      }
+      syncDeviceTiltActive();
+      roomUtilitiesVisible = visible;
+      if (visible) setPhoneImmersive(false);
+      placeUtilityControls();
     }
   );
   galleryRoomView.setTimelineElement(timeline.element);
+  placeUtilityControls();
+  phoneTouchQuery?.addEventListener?.('change', placeUtilityControls);
+  phoneTouchQuery?.addEventListener?.('change', () => setPhoneImmersive(false));
   galleryRoomView.setArtwork(
     artworks[galleryManager.index] ?? null,
     artworks.length > 1,
@@ -1230,7 +1432,9 @@ async function main(): Promise<void> {
   );
   topbar.setRoomViewAvailable(museumHubResolution.galleryRoomViews.length > 0);
   topbar.onRoomViewClick = () => galleryRoomView?.toggle();
-  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
+  // v1.46 (B3): the editor UI is a separate chunk that visitors never load.
+  const editorModules = museumHubEditorMode ? await import('./hub/editor/editorModules') : null;
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks, editorModules);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
     source: 'boot-gallery-selection',
@@ -1264,9 +1468,19 @@ async function main(): Promise<void> {
   const chromeVisibility = new ChromeVisibilityManager(
     chromeRefs.infoPanel!,
     preferences,
-    app
+    app,
+    {
+      // v1.42 — a hidden phone info sheet always comes back collapsed.
+      onRevealChange: (panelId, revealed) => {
+        if (panelId === 'info-panel' && !revealed) infoPanel.setExpanded(false, false);
+      },
+    }
   );
   chromeVisibility.init();
+  infoPanel.onSheetChange = (state) => {
+    if (state === 'dismissed') chromeVisibility.dismiss('info-panel');
+    else chromeVisibility.setPinned('info-panel', state === 'expanded');
+  };
   // v0.62 — register nav controls as a third managed chrome surface.
   // Nav is now auto-hidden in clean mode and participates in the same
   // proximity/focus/keyboard reveal lifecycle as the timeline and info panel.
@@ -1338,6 +1552,21 @@ async function main(): Promise<void> {
   // Fixed Bug 2 (passive pinch) and Bug 3 (duplicate synthetic mouse
   // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+  // A tap that only closes the phone menu or settings must not hide the chrome.
+  let popoverOpenAtPointerDown = false;
+  window.addEventListener('pointerdown', () => {
+    popoverOpenAtPointerDown = !!document.querySelector('.phone-menu__panel:not([hidden]), .prefs__panel:not([hidden])');
+  }, { capture: true, passive: true });
+  canvasInteraction.onSingleTap = () => {
+    if (!popoverOpenAtPointerDown) setPhoneImmersive(!isPhoneImmersive());
+  };
+  for (const el of [chromeRefs.topbar, chromeRefs.timeline, chromeRefs.navControls, chromeRefs.infoPanel]) {
+    // Keyboard focus only; programmatic focus restores after taps must not
+    // bring the chrome back.
+    el?.addEventListener('focusin', (event) => {
+      if (event.target instanceof Element && event.target.matches(':focus-visible')) setPhoneImmersive(false);
+    });
+  }
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
   canvasInteraction.setEnabled(false);
   keyboardNav.setEnabled(false);
@@ -1782,6 +2011,7 @@ async function main(): Promise<void> {
     hintText.updateHint();
     const artworkViewport = measureArtworkViewport();
     galleryManager.handleViewportMetricsChanged();
+    galleryZoomIndicator.rebase();
     diagnostics.info('layout', 'resize', 'Viewport resized', {
       tier: newCaps.layoutTier,
       w: newCaps.viewportW,
@@ -1814,6 +2044,7 @@ async function main(): Promise<void> {
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
     const { reducedMotion, quality, audioMuted, audioVolume } = preferences.current;
+    if (document.documentElement.dataset['chromeMode'] === 'visible') setPhoneImmersive(false);
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
     backgroundAudio.setVolume(audioVolume, 'preferences-apply');
@@ -2043,6 +2274,14 @@ async function main(): Promise<void> {
     // v0.67 — quality lock: automatic runtime quality changes are disabled, so
     // every quality change in the preference store is user-initiated (manual).
     const manual = nextPrefs.quality !== previousPrefs.quality;
+    // Phone nav arrows only reserve artwork space while chrome is pinned
+    // visible, so refit once the new chrome mode has been applied.
+    if (nextPrefs.alwaysShowChrome !== previousPrefs.alwaysShowChrome && phoneTouchQuery?.matches) {
+      requestAnimationFrame(() => {
+        galleryManager.handleViewportMetricsChanged();
+        galleryZoomIndicator.rebase();
+      });
+    }
     const audioChanged =
       nextPrefs.audioMuted !== previousPrefs.audioMuted ||
       Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > VOLUME_CHANGE_EPSILON;
@@ -2072,6 +2311,37 @@ async function main(): Promise<void> {
   });
 
   // Navigation callbacks
+  // v1.46 (E3) — keep the address bar on the current artwork so it can be
+  // shared (`?artwork=` + `view=gallery` in the gallery). Editors keep their URL.
+  const deepLinksEnabled = !museumHubEditorMode && !isPlacementEditorRequested();
+  const syncDeepLinkUrl = (): void => {
+    if (!deepLinksEnabled) return;
+    const search = buildArtworkDeepLinkSearch(
+      window.location.search,
+      artworks[galleryManager.index]?.id ?? null,
+      galleryInteractive
+    );
+    if (search === window.location.search) return;
+    try {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`);
+    } catch {
+      // Some file:// contexts refuse URL updates; the link is optional.
+    }
+  };
+  // Share a clean link (no debug parameters) to the artwork in the gallery.
+  // Local file:// previews have no shareable address, so they get no button.
+  if (deepLinksEnabled && /^https?:$/.test(window.location.protocol)) {
+    infoPanel.setShareHandler(async () => {
+      const artwork = artworks[galleryManager.index];
+      if (!artwork) return null;
+      const search = buildArtworkDeepLinkSearch('', artwork.id, true);
+      const url = `${window.location.origin}${window.location.pathname}${search}`;
+      const result = await shareLink(url, `${artwork.title} – FREYRAUM`);
+      diagnostics.info('interaction', 'artwork-link-shared', 'Artwork link shared', { artworkId: artwork.id, result });
+      return shareLinkFeedback(result);
+    });
+  }
+
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
@@ -2081,6 +2351,7 @@ async function main(): Promise<void> {
       source: 'gallery-navigate',
     });
     galleryRoomView?.setArtwork(artworks[index] ?? null, artworks.length > 1, index, artworks.length);
+    if (galleryInteractive) syncDeepLinkUrl();
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -2152,14 +2423,22 @@ async function main(): Promise<void> {
     enter: () => {
       canvasInteraction.setEnabled(true);
       keyboardNav.setEnabled(true);
+      galleryInteractive = true;
+      syncDeviceTiltActive();
+      syncDeepLinkUrl();
       canvas.focus({ preventScroll: true });
       diagnostics.info('navigation', 'gallery-entered', 'Existing interactive gallery entered from museum hub', {
         artworkId: artworks[galleryManager.index]?.id,
       });
     },
     exit: () => {
+      setPhoneImmersive(false);
       canvasInteraction.setEnabled(false);
       keyboardNav.setEnabled(false);
+      galleryInteractive = false;
+      syncDeviceTiltActive();
+      syncDeepLinkUrl();
+      galleryZoomIndicator.rebase();
     },
   });
   museumHub.onActivate(() => {
@@ -2279,6 +2558,9 @@ async function main(): Promise<void> {
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
     // compute a frame-rate-independent dt for exponential smoothing.
     const galleryChanged = galleryManager.update(now);
+    if (galleryInteractive && !galleryRoomView?.isVisible) {
+      galleryZoomIndicator.report(galleryManager.getZoomMagnification());
+    }
     if (!lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
       return;
     }
@@ -2351,12 +2633,36 @@ async function main(): Promise<void> {
   // v0.81 — hub base fetch + first-page artwork decode + slot layout complete
   // under the overlay (the last weighted progress step), so the first hub
   // paint has zero image pop-in and zero layout shift after reveal.
+  // v1.46 (E3) — `?artwork=` preselects a published artwork in the hub.
+  const deepLink = deepLinksEnabled
+    ? readArtworkDeepLink(window.location.search, new Set(artworkIndexById.keys()))
+    : { artworkId: null, openGallery: false };
+  const deepLinkIndex = deepLink.artworkId !== null ? artworkIndexById.get(deepLink.artworkId) : undefined;
+  if (deepLinkIndex !== undefined) {
+    galleryManager.goTo(deepLinkIndex);
+    galleryManager.promotePrefetchWindow(deepLinkIndex, 'deep-link');
+    diagnostics.info('navigation', 'deep-link', 'Artwork deep link applied', {
+      artworkId: deepLink.artworkId,
+      openGallery: deepLink.openGallery,
+    });
+  }
   loadingOverlay.setStatus('Museum wird vorbereitet');
   await destinationRouter.startAt('hub');
   loadingOverlay.setProgress(100);
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
   museumHub.focusInitialTarget();
+  if (deepLinkIndex !== undefined && deepLink.openGallery) {
+    // A hub choice made while the artwork loads wins over the link.
+    const generationAtLink = hubSelectionGeneration;
+    void galleryManager
+      .whenArtworkInteractive(deepLinkIndex, museumHubResolution.selectionTimeoutMs)
+      .then(() => {
+        if (hubSelectionGeneration !== generationAtLink) return;
+        if (galleryManager.index !== deepLinkIndex) galleryManager.goTo(deepLinkIndex);
+        void destinationRouter.navigate('gallery');
+      });
+  }
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
@@ -2393,6 +2699,7 @@ async function main(): Promise<void> {
     destinationRouter.dispose();
     preferences.dispose();
     canvasInteraction.dispose();
+    deviceTilt.dispose();
     chromeVisibility.dispose();
     keyboardNav.dispose();
     keyboardHelp.dispose();
@@ -2403,6 +2710,8 @@ async function main(): Promise<void> {
     artworkAnnouncerEl = null;
     navControls.dispose();
     zoomControls.dispose();
+    phoneTouchQuery?.removeEventListener?.('change', placeUtilityControls);
+    phoneUtilityMenu.dispose();
     fullscreenButton.dispose();
     preferencesPanel.dispose();
     audioControls.dispose();

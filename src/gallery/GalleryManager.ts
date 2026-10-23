@@ -11,6 +11,11 @@ import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp, smoothDamp } from '../utils/math';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import {
+  MIN_FLING_VELOCITY,
+  rubberBandClamp,
+  stepMomentum,
+} from '../interaction/touchGestures';
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import type { QualityPreset } from '../config/quality';
 import type { StartupReadinessMode } from '../config/startup';
@@ -110,6 +115,13 @@ const LAMBDA_NAV_POSITION = 3.5;
 const LAMBDA_NAV_SCALE = 3.0;
 const LAMBDA_CAMERA_ZOOM = 4.0;
 const LAMBDA_CAMERA_PAN = 5.0;
+/** v1.41: finger-following swipe preview (fast) and its spring back. */
+const LAMBDA_SWIPE_PREVIEW = 22;
+const LAMBDA_SWIPE_RETURN = 9;
+/** Fraction of the finger travel the artwork follows while swipe-previewing. */
+const SWIPE_PREVIEW_RESISTANCE = 0.42;
+/** Double-tap zoom-in factor relative to the reset-fit distance. */
+const DOUBLE_TAP_ZOOM_FACTOR = 2.5;
 
 /**
  * v0.15 — Navigation entrance seeds. Applied to the artwork group before
@@ -336,6 +348,13 @@ export class GalleryManager {
   private inspectionMode = false;
   private pendingResetAfterArtworkLoad = false;
   private lastResetFitZoom = DEFAULT_CAMERA_Z;
+  /**
+   * v1.46 D5 — true while a zoom move (buttons, keys, double-tap, reset) also
+   * moves the pan. Pan then uses the zoom's smoothing so camera x/y stay affine
+   * in camera z: one screen point stays fixed and the view never slides
+   * sideways before it shrinks (same root cause as the v1.44 room drift).
+   */
+  private coupledZoomPan = false;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
   /**
@@ -381,6 +400,19 @@ export class GalleryManager {
   panY = 0;
   targetPanX = 0;
   targetPanY = 0;
+  /**
+   * v1.41 direct touch gestures. While a finger is down the camera follows
+   * the gesture 1:1 (no smoothing cascade); after release the pan carries
+   * momentum and rubber-bands back inside the inspection limits.
+   */
+  private directGesture = false;
+  private gesturePanRawX = 0;
+  private gesturePanRawY = 0;
+  private panMomentumActive = false;
+  private panMomentumVelocityX = 0;
+  private panMomentumVelocityY = 0;
+  private swipePreviewX = 0;
+  private swipeReturning = false;
   /**
    * v0.15 — `DOMHighResTimeStamp` of the previous `update(now)` call.
    * `0` means we have not yet ticked; the first frame is skipped so the
@@ -658,21 +690,181 @@ export class GalleryManager {
     this.scheduleFullTextureSetPrefetch();
   }
 
-  addZoomDelta(delta: number): void {
+  /**
+   * v1.41 — world units covered by one screen pixel on the artwork plane at
+   * the current camera distance, so touch panning moves content 1:1.
+   */
+  worldPerPixel(): number {
+    const metrics = this.getViewportMetrics();
+    return (2 * Math.max(MIN_CAMERA_Z, this.camera.position.z) * this.getFovTan()) / metrics.viewportH;
+  }
+
+  /** Starts a finger-driven pan/pinch: the camera follows the gesture directly. */
+  beginDirectGesture(): void {
+    this.directGesture = true;
+    this.coupledZoomPan = false;
+    this.panMomentumActive = false;
+    this.panMomentumVelocityX = 0;
+    this.panMomentumVelocityY = 0;
+    // Continue from what is on screen so an in-flight animation never jumps.
+    this.targetZoom = this.camera.position.z;
+    this.zoom = this.camera.position.z;
+    this.gesturePanRawX = this.camera.position.x;
+    this.gesturePanRawY = this.camera.position.y;
+    this.targetPanX = this.panX = this.camera.position.x;
+    this.targetPanY = this.panY = this.camera.position.y;
+    this.markRenderDirty(2);
+  }
+
+  /** Content follows the finger: dx/dy are screen pixels (y down). */
+  panByPixels(dx: number, dy: number): void {
+    if (!this.directGesture) this.beginDirectGesture();
+    const wpp = this.worldPerPixel();
+    this.gesturePanRawX -= dx * wpp;
+    this.gesturePanRawY += dy * wpp;
+    this.applyGesturePan();
+  }
+
+  /**
+   * Multiplicative pinch zoom anchored at a viewport point (CSS px). The
+   * world point under the anchor stays under the fingers.
+   */
+  zoomByFactorAt(factor: number, anchorX: number, anchorY: number): void {
+    if (!(factor > 0) || !Number.isFinite(factor)) return;
+    if (!this.directGesture) this.beginDirectGesture();
     const metrics = this.getViewportMetrics();
     const bounds = this.getZoomBounds(metrics);
-    this.targetZoom = this.clampZoom(this.targetZoom + delta, bounds);
+    const currentZ = this.targetZoom;
+    const nextZ = this.clampZoom(currentZ / factor, bounds);
+    const ndcX = (anchorX / metrics.viewportW) * 2 - 1;
+    const ndcY = 1 - (anchorY / metrics.viewportH) * 2;
+    const fovTan = this.getFovTan();
+    const aspect = this.camera.aspect;
+    const deltaHalfH = (currentZ - nextZ) * fovTan;
+    this.gesturePanRawX += ndcX * deltaHalfH * aspect;
+    this.gesturePanRawY += ndcY * deltaHalfH;
+    this.targetZoom = nextZ;
+    this.zoom = nextZ;
+    this.applyGesturePan(metrics, bounds);
+    this.reportPanAvailability();
+  }
+
+  /**
+   * Ends a finger gesture. `velocityX/Y` are the release speed in px/s
+   * (screen axes); the pan coasts and springs back inside the limits.
+   */
+  endDirectGesture(velocityX = 0, velocityY = 0): void {
+    if (!this.directGesture) return;
+    this.directGesture = false;
+    const wpp = this.worldPerPixel();
+    const speed = Math.hypot(velocityX, velocityY);
+    const limits = this.getPanLimits(this.targetZoom);
+    const outside = Math.abs(this.targetPanX) > limits.x + 1e-4 || Math.abs(this.targetPanY) > limits.y + 1e-4;
+    if (this.reducedMotion || (!outside && speed < MIN_FLING_VELOCITY)) {
+      this.clampPanTargets();
+      if (this.reducedMotion) {
+        this.panX = this.targetPanX;
+        this.panY = this.targetPanY;
+      }
+    } else {
+      this.panMomentumActive = true;
+      this.panMomentumVelocityX = speed < MIN_FLING_VELOCITY ? 0 : -velocityX * wpp;
+      this.panMomentumVelocityY = speed < MIN_FLING_VELOCITY ? 0 : velocityY * wpp;
+    }
+    this.reportPanAvailability();
+    this.markRenderDirty(4);
+  }
+
+  get isDirectGestureActive(): boolean {
+    return this.directGesture;
+  }
+
+  /**
+   * Double-tap: zoom in toward the tapped point, or back to the fitted view
+   * when already zoomed in. Uses the regular smoothing cascade.
+   */
+  toggleZoomAt(anchorX: number, anchorY: number): void {
+    this.stopPanMomentum();
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    if (this.targetZoom < bounds.resetFitZoom - RESET_REFIT_EPSILON) {
+      this.resetView();
+      return;
+    }
+    const nextZ = this.clampZoom(bounds.resetFitZoom / DOUBLE_TAP_ZOOM_FACTOR, bounds);
+    const ndcX = (anchorX / metrics.viewportW) * 2 - 1;
+    const ndcY = 1 - (anchorY / metrics.viewportH) * 2;
+    const fovTan = this.getFovTan();
+    const deltaHalfH = (this.targetZoom - nextZ) * fovTan;
+    this.targetPanX += ndcX * deltaHalfH * this.camera.aspect;
+    this.targetPanY += ndcY * deltaHalfH;
+    this.targetZoom = nextZ;
     this.clampPanTargets(metrics, bounds);
+    this.coupledZoomPan = true;
+    this.reportPanAvailability();
+    this.markRenderDirty(4);
+  }
+
+  /**
+   * Finger-following swipe preview at the fitted view: the artwork slides
+   * with resistance while dragging (`offsetPx` from the press point) and
+   * springs back when released without navigating (`offsetPx` = 0).
+   */
+  setSwipePreview(offsetPx: number): void {
+    const next = this.reducedMotion ? 0 : offsetPx * this.worldPerPixel() * SWIPE_PREVIEW_RESISTANCE;
+    this.swipeReturning = next === 0 && this.swipePreviewX !== 0;
+    this.swipePreviewX = next;
+    this.markRenderDirty(4);
+  }
+
+  /** Navigation seeds its own entrance pose; drop any preview offset. */
+  clearSwipePreview(): void {
+    this.swipePreviewX = 0;
+    this.swipeReturning = false;
+  }
+
+  private stopPanMomentum(): void {
+    this.panMomentumActive = false;
+    this.panMomentumVelocityX = 0;
+    this.panMomentumVelocityY = 0;
+  }
+
+  private applyGesturePan(
+    metrics = this.getViewportMetrics(),
+    bounds = this.getZoomBounds(metrics)
+  ): void {
+    const limits = this.getPanLimits(this.targetZoom, metrics, bounds);
+    const visibleHalfH = this.targetZoom * this.getFovTan();
+    const visibleHalfW = visibleHalfH * this.camera.aspect;
+    this.targetPanX = rubberBandClamp(this.gesturePanRawX, -limits.x, limits.x, visibleHalfW);
+    this.targetPanY = rubberBandClamp(this.gesturePanRawY, -limits.y, limits.y, visibleHalfH);
+    this.markRenderDirty(2);
+  }
+
+  /**
+   * v1.45 — eased multiplicative zoom (`factor` > 1 zooms in), the shared
+   * per-step curve of wheel, buttons and keys in gallery and photo room.
+   */
+  zoomByFactor(factor: number): void {
+    if (!(factor > 0) || !Number.isFinite(factor)) return;
+    this.stopPanMomentum();
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    this.targetZoom = this.clampZoom(this.targetZoom / factor, bounds);
+    this.clampPanTargets(metrics, bounds);
+    this.coupledZoomPan = true;
     this.reportPanAvailability();
     this.markRenderDirty(4);
   }
 
   setPanOffset(deltaX: number, deltaY: number): void {
+    this.stopPanMomentum();
     const metrics = this.getViewportMetrics();
     const bounds = this.getZoomBounds(metrics);
     const { x, y } = this.getPanLimits(this.targetZoom, metrics, bounds);
     this.targetPanX = clamp(this.targetPanX + deltaX, -x, x);
     this.targetPanY = clamp(this.targetPanY + deltaY, -y, y);
+    this.coupledZoomPan = false;
     this.markRenderDirty(4);
   }
 
@@ -1618,7 +1810,9 @@ export class GalleryManager {
     const metrics = this.getViewportMetrics();
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom, bounds);
-    this.clampPanTargets(metrics, bounds);
+    // Direct gestures and momentum own the pan target (rubber-band overshoot
+    // is intentional there); everything else is clamped every tick.
+    if (!this.directGesture && !this.panMomentumActive) this.clampPanTargets(metrics, bounds);
     const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
     this.targetX = constrainedHover.targetRotX;
     this.targetY = constrainedHover.targetRotY;
@@ -1634,7 +1828,11 @@ export class GalleryManager {
 
     // Navigation position settle — λ=2.5 → ~1200 ms settle (witnessable
     // artwork entrance, including the new position.z depth recession).
-    group.position.x = smoothDamp(group.position.x, 0, LAMBDA_NAV_POSITION, dt);
+    const previewLambda = this.swipePreviewX !== 0
+      ? LAMBDA_SWIPE_PREVIEW
+      : this.swipeReturning ? LAMBDA_SWIPE_RETURN : LAMBDA_NAV_POSITION;
+    group.position.x = smoothDamp(group.position.x, this.swipePreviewX, previewLambda, dt);
+    if (this.swipeReturning && Math.abs(group.position.x) < 1e-3) this.swipeReturning = false;
     group.position.y = smoothDamp(group.position.y, 0, LAMBDA_NAV_POSITION, dt);
     group.position.z = smoothDamp(group.position.z, 0, LAMBDA_NAV_POSITION, dt);
 
@@ -1642,6 +1840,33 @@ export class GalleryManager {
     group.scale.x = smoothDamp(group.scale.x, 1, LAMBDA_NAV_SCALE, dt);
     group.scale.y = smoothDamp(group.scale.y, 1, LAMBDA_NAV_SCALE, dt);
     group.scale.z = smoothDamp(group.scale.z, 1, LAMBDA_NAV_SCALE, dt);
+
+    if (this.directGesture) {
+      // v1.41: finger-driven camera — content stays exactly under the fingers.
+      this.zoom = this.targetZoom;
+      this.camera.position.z = this.targetZoom;
+      this.panX = this.targetPanX;
+      this.panY = this.targetPanY;
+      this.camera.position.x = this.panX;
+      this.camera.position.y = this.panY;
+      this.clampArtworkDepthPose();
+      return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
+    }
+    if (this.panMomentumActive) {
+      const limits = this.getPanLimits(this.targetZoom, metrics, bounds);
+      const stepX = stepMomentum(
+        { position: this.targetPanX, velocity: this.panMomentumVelocityX }, dt, -limits.x, limits.x
+      );
+      const stepY = stepMomentum(
+        { position: this.targetPanY, velocity: this.panMomentumVelocityY }, dt, -limits.y, limits.y
+      );
+      this.targetPanX = this.panX = this.camera.position.x = stepX.position;
+      this.targetPanY = this.panY = this.camera.position.y = stepY.position;
+      this.panMomentumVelocityX = stepX.velocity;
+      this.panMomentumVelocityY = stepY.velocity;
+      if (stepX.settled && stepY.settled) this.stopPanMomentum();
+      this.markRenderDirty(2);
+    }
 
     // Camera zoom — λ=4.0 → ~750 ms settle (graceful, responsive).
     this.zoom = smoothDamp(this.zoom, this.targetZoom, LAMBDA_CAMERA_ZOOM, dt);
@@ -1652,21 +1877,37 @@ export class GalleryManager {
       dt
     );
 
-    // Camera pan — λ=5.0 → ~600 ms settle (connected to input).
-    this.panX = smoothDamp(this.panX, this.targetPanX, LAMBDA_CAMERA_PAN, dt);
-    this.panY = smoothDamp(this.panY, this.targetPanY, LAMBDA_CAMERA_PAN, dt);
-    this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, LAMBDA_CAMERA_PAN, dt);
-    this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, LAMBDA_CAMERA_PAN, dt);
+    // Camera pan — λ=5.0 → ~600 ms settle (connected to input); during a
+    // coupled zoom move it shares the zoom's λ (see `coupledZoomPan`).
+    const panLambda = this.coupledZoomPan ? LAMBDA_CAMERA_ZOOM : LAMBDA_CAMERA_PAN;
+    this.panX = smoothDamp(this.panX, this.targetPanX, panLambda, dt);
+    this.panY = smoothDamp(this.panY, this.targetPanY, panLambda, dt);
+    this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, panLambda, dt);
+    this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, panLambda, dt);
+    if (this.coupledZoomPan
+      && Math.abs(this.camera.position.z - this.targetZoom) < 1e-4
+      && Math.abs(this.camera.position.x - this.targetPanX) < 1e-4
+      && Math.abs(this.camera.position.y - this.targetPanY) < 1e-4) {
+      this.coupledZoomPan = false;
+    }
     this.clampArtworkDepthPose();
     return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
   }
 
+  /** v1.46 D3 — target magnification relative to the fitted view (1 = fit). */
+  getZoomMagnification(): number {
+    return this.lastResetFitZoom / Math.max(MIN_CAMERA_Z, this.targetZoom);
+  }
+
   resetView(): void {
+    this.stopPanMomentum();
+    this.directGesture = false;
     const bounds = this.getZoomBounds();
     this.targetPanX = 0;
     this.targetPanY = 0;
     this.targetZoom = bounds.resetFitZoom;
     this.lastResetFitZoom = bounds.resetFitZoom;
+    this.coupledZoomPan = true;
     this.targetX = 0;
     this.targetY = 0;
     this.reportPanAvailability();

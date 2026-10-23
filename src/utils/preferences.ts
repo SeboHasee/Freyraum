@@ -12,6 +12,9 @@ import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from '../audio/volumeMap
  */
 
 export type ContrastMode = 'auto' | 'high';
+/** v1.41: motion-sensor artwork tilt. `auto` enables it where no permission
+ *  prompt is required (Android) on coarse-pointer devices. */
+export type DeviceTiltMode = 'auto' | 'on' | 'off';
 
 export interface Preferences {
   reducedMotion: boolean;
@@ -25,6 +28,7 @@ export interface Preferences {
   /** v0.60: when true, timeline + info panel stay permanently visible
    *  (disables clean-chrome auto-hide). Default false. */
   alwaysShowChrome: boolean;
+  deviceTilt: DeviceTiltMode;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
@@ -109,6 +113,8 @@ export class PreferencesStore {
       audioMuted: false, // always start unmuted regardless of stored state
       audioVolume,
       alwaysShowChrome: stored.alwaysShowChrome === true,
+      deviceTilt:
+        stored.deviceTilt === 'on' || stored.deviceTilt === 'off' ? stored.deviceTilt : 'auto',
     };
 
     const shouldNormalizeMutedPreference = stored.audioMuted !== false;
@@ -185,6 +191,13 @@ export class PreferencesStore {
     if (this.prefs.alwaysShowChrome === value) return;
     this.prefs.alwaysShowChrome = value;
     diagnostics.info('always-show-chrome', 'Clean-chrome preference changed', { value });
+    this.emit();
+  }
+
+  setDeviceTilt(mode: DeviceTiltMode): void {
+    if (this.prefs.deviceTilt === mode) return;
+    this.prefs.deviceTilt = mode;
+    diagnostics.info('device-tilt', 'Motion-sensor tilt preference changed', { mode });
     this.emit();
   }
 

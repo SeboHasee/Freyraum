@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
@@ -112,6 +112,23 @@ Notes:
 - Artwork activation into the inspection gallery is disabled while calibrating;
   the room bar still switches editable rooms.
 
+### `?artwork=<id>` and `&view=gallery`
+
+Shareable artwork deep link (`src/navigation/deepLink.ts`, v1.46).
+
+- `?artwork=<id>` preselects that published artwork in the museum hub (the
+  panorama/strip is aligned to it). IDs are the importer IDs (lowercase
+  `a-z`, `0-9`, `-`); unknown or malformed IDs are ignored.
+- Adding `&view=gallery` opens the artwork in the interactive gallery after
+  Start, once it is ready. A hub choice made meanwhile wins.
+- While visiting, the address bar follows the current artwork with
+  `history.replaceState` (no extra history entries); leaving the gallery
+  drops `view=gallery`. Other parameters such as `?debug=` are kept.
+- "Link teilen" in the artwork information shares
+  `?artwork=<id>&view=gallery` without other parameters (http/https only).
+- Not used by the placement editor or `?hubCalibrate=1`.
+- Test: `npm run test:deep-links`.
+
 ### `?hubDebug=1`
 
 Read-only museum-hub geometry diagnostics overlay (`src/hub/MainMuseumHub.ts`).
@@ -204,7 +221,7 @@ redact them. The route-aware source-to-pixel recovery procedure is in
 
 ### `freyraum.preferences.v1`
 
-Stored user preferences (`src/utils/preferences.ts`): quality, motion/contrast settings, audio volume, and chrome visibility mode. Lighting is fixed internally to the dramatic configuration and is not user-configurable.
+Stored user preferences (`src/utils/preferences.ts`): quality, motion/contrast settings, audio volume, chrome visibility mode, and `deviceTilt` (`auto` | `on` | `off`, default `auto`; v1.41 motion-sensor artwork tilt in the gallery — `auto` enables it on touch devices that need no permission; v1.42: reduced motion disables it in every mode and a stored `on` resumes afterwards). Lighting is fixed internally to the dramatic configuration and is not user-configurable.
 
 Invariant: persisted writes force `audioMuted: false`, so each new session starts unmuted.
 

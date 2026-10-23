@@ -646,7 +646,7 @@ assert.match(
 );
 assert.match(
   editorSource,
-  /new EditorGalleryRoomViews/,
+  /new \(this\.requireEditorModules\(\)\.EditorGalleryRoomViews\)/,
   'the room tab exposes the photo-room editor'
 );
 assert.match(
@@ -698,7 +698,7 @@ assert.match(roomViewSource, /this\.disableDeviceMotionTilt\(\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(
   roomViewSource,
-  /this\.zoomBy\(Math\.exp\(-event\.deltaY \* 0\.001\)\)/,
+  /this\.zoomBy\(wheelZoomFactor\(normalizeWheelDelta\(event\.deltaY, event\.deltaMode, window\.innerHeight\), event\.ctrlKey\)\)/,
   'wheel zoom targets the artwork like the zoom buttons'
 );
 assert.match(roomViewSource, /HOVER_INFLUENCE_RADIUS_PX = 900/);
@@ -715,11 +715,24 @@ assert.match(
   'room dialog focus order includes utility form controls'
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+{
+  const wheelRate = (path) =>
+    readFileSync(resolve(ROOT, path), 'utf8').match(/const WHEEL_ZOOM_PER_PX = ([0-9.]+);/)?.[1];
+  assert.equal(
+    wheelRate('scripts/test-gallery-room-view-browser.mjs'),
+    wheelRate('src/interaction/touchGestures.ts'),
+    'browser suite mirrors the shared WHEEL_ZOOM_PER_PX wheel curve'
+  );
+}
 const helpSource = readFileSync(resolve(ROOT, 'src/ui/KeyboardHelp.ts'), 'utf8');
 assert.match(helpSource, /Mit dem Mausrad zoomen/);
 assert.match(helpSource, /Bei vergrößerter Ansicht verschieben; in der Übersicht horizontal zum nächsten Bild wechseln/);
 assert.match(helpSource, /Bei vergrößerter Ansicht das Foto verschieben/);
 assert.match(helpSource, /Mit dem Mausrad auf das Kunstwerk zoomen/);
+assert.match(helpSource, /An der Stelle eine Stufe herauszoomen/, 'help lists Shift+double-click step-out');
+assert.match(helpSource, /Vergrößertes Foto verschieben/, 'help lists Shift+arrow panning');
+assert.match(roomViewSource, /if \(event\.shiftKey\) this\.zoomOutStepAt\(/, 'Shift+double-click zooms out one step');
+assert.match(roomViewSource, /event\.shiftKey && event\.key\.startsWith\('Arrow'\)/, 'Shift+arrows pan the zoomed photo');
 assert.match(
   hubStyles,
   /\.gallery-room-view__scene\.is-fine-pointer\.is-pan-available\s*\{\s*cursor:\s*grab/,

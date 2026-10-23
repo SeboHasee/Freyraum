@@ -151,7 +151,11 @@ try {
   const backgroundFilename = config.background.src.slice('Backgrounds/'.length);
   const backgroundDirectory = url.protocol === 'file:' ? 'Backgrounds' : 'backgrounds';
   const expectedBackgroundPath = `/${backgroundDirectory}/${backgroundFilename}`;
-  check(Boolean(backgroundSrc) && decodeURIComponent(new URL(backgroundSrc).pathname).endsWith(expectedBackgroundPath),
+  const backgroundStem = backgroundFilename.replace(/\.[^.]+$/, '');
+  const backgroundPathname = backgroundSrc ? decodeURIComponent(new URL(backgroundSrc).pathname) : '';
+  const isWebBackground = backgroundPathname.includes('/web-images/bg-')
+    && backgroundPathname.slice(backgroundPathname.lastIndexOf('/') + 1).startsWith(`bg-${backgroundStem}-`);
+  check(Boolean(backgroundSrc) && (backgroundPathname.endsWith(expectedBackgroundPath) || isWebBackground),
     `configured primary background selected (${backgroundSrc || 'no resolved image source'})`);
   if (backgroundSrc) await assertPixelContribution(page, '.museum-hub__image', 'primary photograph');
   else check(false, 'primary photograph: no decoded background contributes visible pixels');

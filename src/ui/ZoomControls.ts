@@ -1,6 +1,5 @@
 import type { GalleryManager } from '../gallery/GalleryManager';
-
-const ZOOM_STEP = 0.6;
+import { ZOOM_STEP_FACTOR } from '../interaction/touchGestures';
 
 export class ZoomControls {
   private readonly el: HTMLElement;
@@ -15,11 +14,11 @@ export class ZoomControls {
     this.el.setAttribute('aria-label', 'Zoom-Steuerung');
 
     const zoomIn = this.createButton('zoom-controls__btn', 'Vergrößern', '＋', () => {
-      this.galleryManager.addZoomDelta(-ZOOM_STEP);
+      this.galleryManager.zoomByFactor(ZOOM_STEP_FACTOR);
     });
 
     const zoomOut = this.createButton('zoom-controls__btn', 'Verkleinern', '−', () => {
-      this.galleryManager.addZoomDelta(ZOOM_STEP);
+      this.galleryManager.zoomByFactor(1 / ZOOM_STEP_FACTOR);
     });
 
     const reset = this.createButton('zoom-controls__btn zoom-controls__btn--reset', 'Ansicht zurücksetzen', '⟲', () => {

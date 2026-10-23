@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -60,6 +60,12 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     restoring them when closed. Room choice remains separate from artwork
     selection. Its photo camera and overlay controls do not change the calibrated
     artwork projection or the museum's separate photo-backed presentation.
+    Camera frames only write the scene transform; the camera-independent
+    artwork projection refreshes on open/resize/room/artwork changes, and
+    `.is-camera-moving` (`will-change: transform`) is set only while the
+    camera moves so the final scale re-rasters sharply (v1.43).
+    v1.46: at fitted zoom a horizontal touch swipe changes the room (C2), and
+    `applyCamera` reports the target scale to the shared zoom readout.
 
 ## Current hub-layout acceptance boundary
 
@@ -113,9 +119,52 @@ both file entries.
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
+  - `interaction/touchGestures.ts` (v1.41): pure, shared touch physics —
+    velocity tracking, momentum, rubber band, snapping, tap slop, double tap,
+    reduced-motion check and haptic tick. Used by `CanvasInteraction`,
+    `GalleryRoomView` and `MainMuseumHub`; keep new touch surfaces on it.
+  - `CanvasInteraction` drives the gallery through `GalleryManager`'s direct
+    gesture API (`beginDirectGesture`, `panByPixels`, `zoomByFactorAt`,
+    `endDirectGesture`, `toggleZoomAt`, swipe preview); buttons and wheel keep
+    the smoothed zoom cascade.
+  - `PhoneUtilityMenu` (v1.42): phone "more" popover. `placeUtilityControls`
+    in `main.ts` is the single owner of where audio/settings/fullscreen/help
+    live (desktop cluster, photo-room utilities, or the menu).
+  - `InfoPanel` compact mode (v1.42) is a bottom sheet; its handle uses
+    `resolveSheetRelease` and pins the panel via `ChromeVisibilityManager.setPinned`.
+    v1.46: peek/half/full stops, and a **Link teilen** button wired through
+    `setShareHandler`.
+  - `ZoomIndicator` (v1.46): transient zoom readout with a polite live region;
+    the gallery reports `GalleryManager.getZoomMagnification()` from the render
+    loop, the photo room reports from `applyCamera`.
+  - `shareLink.ts` (v1.46): `navigator.share`, then clipboard fallback; a
+    cancelled share sheet (`AbortError`) is not an error.
+  - `Timeline` (v1.46) follows the list's flex direction, so the touch
+    short-landscape side rail scrolls vertically.
+  - Phone immersive view (v1.46): `setPhoneImmersive` in `main.ts`, triggered by
+    `CanvasInteraction.onSingleTap`, sets `data-phone-immersive` and refits.
+- `src/navigation/deepLink.ts` (v1.46): pure parse/build of
+  `?artwork=<id>&view=gallery`; `main.ts` applies it after boot and keeps the
+  URL in sync with `history.replaceState` (`docs/QUERY_PARAMETERS.md`).
+- `GalleryManager.coupledZoomPan` (v1.46): while a zoom move is eased, the pan
+  uses the zoom filter so the cursor/fixed point does not drift; cleared by
+  direct gestures, `setPanOffset` and arrival.
+- `src/gallery/DeviceTiltController.ts` + `deviceOrientation.ts` (v1.41):
+  orientation permission, dead zone, neutral drift and screen-angle mapping;
+  `main.ts` feeds the unit tilt into `GalleryManager.setHoverTarget` only while
+  the gallery is active and the photo room is closed.
+- `src/hub/hubPanorama.ts` (v1.41): pure phone-panorama camera math (pan
+  limits, artwork-centring pans, strip ↔ pan mapping, edge room step).
+  `MainMuseumHub` owns the DOM (`is-panorama`, `--hub-pan-x`, artwork strip);
+  projection and placement math are unchanged.
 - `src/utils/`
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
-    plan used by both gallery and hub
+    plan used by both gallery and hub; since v1.46 also the deployed WebP
+    size choice (`applyWebImages`: one display size per device, smallest for
+    thumbnails) from `window.__FREYRAUM_WEB_IMAGES`
+    (`scripts/build-web-images.mjs`)
+  - `webBackgrounds.ts` (v1.46): deployed WebP copies of the room photographs;
+    the editor's calibration view keeps the original PNG
   - `sourceToPixelOutcome.ts`: redacted route-aware outcome diagnostics;
     optional `presentationPath` distinguishes `'dom'` from `'webgl'`. Hub DOM
     outcomes retain native decoded dimensions with null GPU/probe fields and
@@ -135,9 +184,11 @@ both file entries.
     keyboard/screen-reader-friendly 2D artwork collection; unrelated startup
     failures are not described as WebGL absence.
 
-## Editor modules, saving and desktop app (v1.35–v1.40)
+## Editor modules, saving and desktop app (v1.35–v1.46)
 
-- `src/hub/editor/`: editor UI split out of `MainMuseumHub` — tabs
+- `src/hub/editor/`: editor UI split out of `MainMuseumHub` (v1.46: the
+  classes reach the hub through the lazily imported `editorModules.ts`
+  chunk; `MainMuseumHub` keeps type-only imports) — tabs
   (`editorTabs`), texts/labels (`editorText`), toast, room bar (`roomBar`),
   artwork library and thumbnails (`artworkLibrary`, `thumbnails` →
   `thumbnailKey()`), placement drag/keyboard (`placementController`), and the

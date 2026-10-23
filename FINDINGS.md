@@ -1,5 +1,225 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+
+## 2026-10-22 — v1.46 download size and phone feel
+
+- **Gallery reset drift (D5) had the v1.44 room cause.** `GalleryManager`
+  eased camera z with two λ 4 stages and camera x/y with two λ 5 stages. A
+  zoom move that also changes pan (reset, button/key zoom with clamped pan,
+  double-click) therefore reached the target pan before the target zoom: the
+  view slid toward the centre and then shrank. Simulated reset from 2.5× at an
+  edge: the zoom's fixed point wandered by 0.042 (screen units of z, ≈ 5–8 % of
+  the half width) with λ 5, 0 with a shared λ. Fix: `coupledZoomPan` uses the
+  zoom λ for pan during such moves; pure pans and finger gestures keep λ 5 /
+  direct follow. Guard: `npm run test:touch-gestures`.
+- **The deployed site shipped every original twice.** `customer-artworks.js`
+  embedded each original as base64 `webglImage` (+33 %) for the `file://`
+  preview, and the same file went to Pages: 70,775,176 bytes before the first
+  artwork. The local preview build also copied `public/` over
+  `customer-preview/`, so a web-only manifest would have broken `file://`
+  (lesson 134).
+- **Each image was downloaded about three times.** The hub `<img>`, the
+  timeline thumbnail (full original) and the gallery texture loaded the same
+  URL; the texture used `crossOrigin="anonymous"` for any `http(s)` URL, which
+  is a separate cache entry. Fraktal (26 MB PNG) cost 78 MB per visit.
+- **Before/after** (local production build at `/Freyraum/`, headless Chrome,
+  SwiftShader; bytes = response bodies until the gallery shows Fraktal):
+
+  | Measure | Before | B1 | B1+B2 | +B4a backgrounds |
+  |---|---|---|---|---|
+  | `customer-artworks.js` | 70,775,176 B | 19,057 B | 20,254 B | ~20 KB |
+  | Bytes per visit, desktop | 237.5 MB | 166.7 MB | 19.9 MB | 6.0 MB¹ |
+  | Bytes per visit, phone 390×844 @3× | — | — | 18.6 MB | 4.8 MB¹ |
+  | Artwork image bytes per visit | ~147 MB | ~147 MB | 4.4 MB desktop / 3.2 MB phone | unchanged |
+  | Fraktal texture (GPU, mip incl.) | ~97 MB | ~97 MB | ~67 MB desktop / ~17 MB phone | unchanged |
+  | Start button enabled (localhost) | ~31 s | ~31 s | ~33 s desktop / ~20 s phone | not remeasured |
+
+  ¹ Unique response bodies until the hub has settled (1440×900 desktop),
+  measured after B4a. The hub photo `Museum_ohne_Bilder.png` (11.2 MB) is
+  now a 4000×2250 WebP of 176 KB (PSNR 42.2 dB against the PNG, same
+  dimensions, so calibration is unchanged); room photos are 41–190 KB.
+
+  Start-button time is dominated by SwiftShader GPU work and the minimum
+  loading screen, not bytes; on a real network the byte drop is what
+  visitors feel. B4a then replaced the ~15 MB of hub/room background PNGs
+  with same-size WebP copies (`window.__FREYRAUM_WEB_BACKGROUNDS`).
+- **Phones in landscape had a 118 px artwork:** an 844×390 touch phone is
+  wider than the 599 px phone breakpoint, so it got the desktop
+  `--chrome-bottom` (200 px) plus a 111 px timeline and floating arrows over
+  the artwork. C3 gives touch short-landscape its own chrome (right rail,
+  phone menu, swipe/pinch only): 744×334 px usable.
+- **Editor split:** the visitor entry chunk went from 1,141,602 to
+  1,068,800 bytes; the editor UI is a 74 KB chunk. three.js keeps the entry
+  above Vite's 500 KB warning, so the warning stays; the budget is 1.15 MB.
+- **Stale test found:** `test:editor-rooms` still expected 2 photo rooms
+  after v1.42 configured 4; it now reads the count from the export.
+
+## 2026-10-22 — v1.45 handoff implementation findings
+
+- **Phone strip failure was test timing, not geometry.** The v1.44 failure
+  ("room-01.wall-left.a is fully on screen after its strip tap") did not
+  reproduce on rerun with diagnostics; all strip entries framed their artwork
+  at 390×844 and 360×780. The helper `waitForPanSettled` accepted four equal
+  reads over ~1 s as "settled", which SwiftShader rAF starvation can produce
+  mid-glide. Geometrically, `panoramaPanForFraction` frames any artwork that
+  lies inside the photo and is narrower than the screen (edge clamping only
+  happens when the photo edge is already on screen); a pure sweep now proves
+  it at 360–430 px widths.
+- **Zoom per step differed by design.** Gallery wheel: `z += 0.0045·dy`
+  (additive camera distance) → magnification per notch grows as `z` shrinks
+  (≈7 % at fit z≈7, ≈29 % at z≈2). Gallery buttons/keys: `z ± 0.6` (≈9 % at
+  fit, ≈43 % close). Room: ×1.105 per notch, ×1.25 per button. Now both use
+  one multiplicative curve.
+- **Baseline, `npm run measure:room-zoom`** (headless Chrome 155, SwiftShader,
+  1440×900; counts per scenario, durations inflated by rAF starvation):
+
+  | scenario | raster | paint | decode | style | layout |
+  |---|---|---|---|---|---|
+  | gallery wheel in ×6 | 29 | 106 | 4 | 24 | 2 |
+  | gallery wheel out ×6 | 0 | 95 | 0 | 19 | 0 |
+  | gallery double-click in | 3 | 6 | 0 | 3 | 2 |
+  | gallery double-click out | 5 | 17 | 0 | 6 | 2 |
+  | room wheel in ×6 | 8 | 83 | 0 | 38 | 1 |
+  | room wheel out ×6 | 0 | 150 | 0 | 66 | 0 |
+  | room button in ×3 | 0 | 60 | 0 | 24 | 0 |
+  | room reset | 1 | 121 | 0 | 48 | 1 |
+  | room double-click in | 41 | 136 | 3 | 57 | 1 |
+  | room double-click out | 31 | 131 | 0 | 52 | 1 |
+
+  Layout stays at ≤ 1 per room zoom (v1.44 viewport cache). Raster work is
+  low for wheel/button zooms; the double-click scenarios raster most (41/31),
+  i.e. promoting at 1× and re-rastering at 2.5× after settle. The room still
+  issues one main-thread `Paint` and ~0.4 style recalcs per frame (gallery:
+  WebGL, far fewer) — next suspects: the per-frame `syncPanCursor` class
+  toggles and the timeline/controls sharing the scene's paint layer.
+- **Not done in v1.45 (open):** split-layer raster (plan 1.2) — the numbers
+  above say double-click is the case to target; a gallery-reset drift check
+  (1.4); zoom-level indicator (1.5); phases 2.1–2.5, 3, 4, 5 of the handoff
+  plan (tracked in `plan.md`).
+
+## 2026-10-21 — v1.44 photo-room zoom-out drift findings
+
+- **Root cause of the left drift:** `resetCamera(true)` (second double-click,
+  reset button, `0` key) called `animateCamera(1, 0, 0)` without an anchor.
+  Offsets eased toward 0 with one smoothDamp stage (λ 5) while scale eased
+  through two stages (λ 4 → λ 4), so the offset reached 0 — the photo's
+  left/top edge — while the scale was still well above 1. On screen the
+  zoomed view slid to the left/top edge first and shrank afterwards. Fix: zoom
+  about the fixed point `c = (oTarget − oStart) / (sStart − sTarget)` per axis,
+  which stays inside the photo for reset and keeps every frame in bounds.
+- **Forced layout per frame:** `applyCamera`, `panLimits` and the anchored
+  animation tick each read `getBoundingClientRect()` right after a transform
+  write. The size only changes on resize/visibility, so it is now cached.
+- **Button state writes per frame:** three `disabled` writes per camera frame
+  are now change-only.
+- **Raster scale of the motion layer (open):** a `will-change: transform` layer
+  keeps the raster scale it had when promoted. Zoom-in can therefore look soft
+  until the 160 ms settle re-raster, and zoom-out from a large scale rasters
+  newly visible tiles at the old, high scale. Headless screenshots force a
+  fresh raster, so this cannot be judged headlessly (probe tried in v1.44);
+  needs a real-GPU desktop check. Options if visible: split the camera into
+  a layer `scale(s / k)` plus an inner painted `scale(k)` with `k` = target
+  scale (one repaint at animation start, then composite-only and sharp), or a
+  WebGL room renderer sharing the gallery's mipmapped textures.
+- **Remaining feel difference:** the gallery is a perspective camera, so equal
+  wheel notches accelerate as it approaches the artwork; the room uses a
+  constant ~10.5 % per notch. Both use the same two-stage easing.
+
+## 2026-10-21 — v1.43 desktop photo-room zoom findings
+
+- **Same easing, different renderer:** the photo room already used the
+  gallery's two-stage camera easing (zoom λ 4, pan λ 5). The difference was
+  rendering: the gallery is WebGL (mipmapped texture, only a draw per frame),
+  while the room is a DOM scene whose `scale()` changed every frame. Without a
+  compositing hint Chrome re-rastered the scene and re-decoded the 2K photo and
+  full-resolution artwork (with three `drop-shadow` filters) at each scale.
+  Chrome trace, 1440×900, six wheel notches: 515/538 raster tasks without vs.
+  80/82 with motion-only `will-change: transform`; layout stayed ~2 per zoom.
+  Permanent `will-change` would freeze the raster scale (soft artwork when
+  zoomed), so it is applied only while moving.
+- **Headless frame counts cannot show this:** SwiftShader produced ~37 frames
+  per zoom in every variant (rAF starvation), so judge by raster/decode work
+  in a trace, not by frame rate.
+- **Per-frame homography:** `applyCamera` called `updateArtworkTransform`,
+  re-projecting the camera-independent artwork and reading layout after style
+  writes on every frame.
+- **Double-click** only reset the photo view, unlike the gallery's toggle.
+- **Wheel units:** both views assumed pixel-mode `deltaY`; line/page mode
+  wheels zoomed almost nothing.
+- **Trackpad pinch:** browsers deliver it as ctrl+wheel; the gallery's passive
+  listener could not prevent it, so the page zoomed together with the artwork.
+
+## 2026-10-21 — v1.42 mobile follow-up findings
+
+- **Photo-room suite wheel-zoom path (merge readiness):** "off-center wheel
+  zoom follows a straight artwork-center path" failed with 124–127 px deviation,
+  also when run alone. Cause: the test's CDP drag delivered press/move/release
+  within milliseconds, the v1.41 `VelocityTracker` reported a fling, and the
+  release glide moved the camera toward the photo edge so the following zoom
+  was clamped. App behaviour is intended (wheel zoom still stops a running
+  glide); the test now holds 250 ms before release and waits for a settled
+  camera. Lesson 129. The suite's later "shared utility controls return to
+  gallery chrome" check still expected `#app` at 390×844 with touch; since
+  v1.42 the controls correctly return to the topbar phone menu there.
+- **Invisible info panel on touch:** `:root[data-hover='false'][data-chrome-mode='clean'] .info-panel`
+  (opacity 0, no pointer events) had the same specificity as the reveal rules
+  and came later, so revealed panels stayed invisible on phones. Scoped to
+  `:not(.is-revealed)`; `test:mobile-browser` asserts opacity and pointer events.
+- **Settings from the phone menu** started ~140 px down and overflowed the
+  viewport by 12 px with the desktop `100dvh − 120px` cap; the menu variant
+  uses `− 168px`. The menu panel needed `contain: layout` (not `paint`) on the
+  topbar so the popover is not clipped.
+- **Geometry suite:** the shipped `museum-hub.json` holds customer-curated
+  slot values and rescaled doorways (~2.5–2.7 m); exact fixtures were stale.
+  The checks are now ranges, and the above-band fixture stays inside the
+  calibrated safe-area top (the customer calibration leaves < 0.25 m there).
+- **Zoom cap:** photo-room zoom magnifies the separately loaded artwork image;
+  capping by the ~2K background (≈1.4× at 1440 px) would cut useful zoom, so
+  6× stays.
+- **Nav occlusion:** excluding the arrows by measured opacity meant a resize
+  during a forced reveal shrank the artwork until the next resize; the
+  exclusion now follows the chrome mode.
+
+## 2026-10-21 — Mobile experience root causes (v1.41)
+
+- **Hidden hub artworks:** narrow portrait `applyView` added `is-off-wall`
+  (`visibility:hidden; pointer-events:none`) to every artwork outside the
+  focused wall group, although those walls were still visible in the photo.
+  Visibility must come from measured on-screen bounds, never from wall groups.
+- **Hub navigation:** three fixed wall views changed with a 0.45 s transition
+  only after a 56 px swipe; passive listeners without `touch-action` let the
+  browser steal the gesture; a drag ending on an artwork also clicked it.
+- **Tiny hub on phones:** contain-fitting a 16:9 photo into a portrait phone
+  left a ~219 px strip under full-size title/intro chrome. The panorama sizes
+  the visual by available height (`dvh` + safe areas) instead.
+- **Gyro:** only the photo room listened, behind an opt-in button; the 1.2° cap
+  and `perspective(1200px)` produced sub-pixel motion, and the per-update CSS
+  `transition: transform 1100ms` restarted on every sensor event (lag). Tilt
+  also paused while a finger touched the screen.
+- **Different zoom feel:** gallery pinch added a fixed camera-Z step and was
+  smoothed twice (λ=4), pan used a fixed `dx*0.004` world step; the photo room
+  multiplied scale and followed the finger directly. Neither had momentum or
+  rubber band. Both now share `touchGestures.ts`.
+- **Loading line:** a gold→blue gradient unrelated to the wall/accent palette,
+  and no `theme-color`, so the mobile browser bar used its default colour.
+- **Headless browser suite:** under SwiftShader the WebGL gallery behind the
+  photo room starves `requestAnimationFrame` (about one frame every 1–2 s, each
+  capped to 0.1 s of easing), so the terminal 6× zoom took longer than the
+  20 s wait (`scale(5.998…)`). The camera logic converges; the test now waits
+  up to 90 s for that step. This also explains the earlier `5.99409` report.
+- **Glide vs. eased zoom (fixed):** after a quick mouse/touch drag the new pan
+  momentum kept moving the photo-room camera while a wheel/button zoom eased
+  toward the artwork, bending its path (140 px deviation in the browser suite).
+  `animateCamera` now stops the pan glide first; the gallery already did.
+- **Spring-back under starvation:** `waitForCameraSettled` treats ~300 ms
+  without a frame as settled, so it can sample mid-spring-back. The edge test
+  now waits for the actual photo-edge offset. Kill stray headless Chrome
+  processes between runs; one left at ~250 % CPU made earlier steps time out.
+- **Museum-hub geometry suite (resolved in v1.42, see above):** besides the known doorway-height failure at
+  `scripts/test-museum-hub-geometry.mjs:411`, temporarily skipping that line on
+  the unmodified base commit `182d819` shows a further pre-existing failure
+  (`room-01.wall-front.a must use its curated wall position`, ~line 459). Later
+  assertions are therefore not exercised; treat the suite as blocked, not green.
 
 ## 2026-10-20 — Pan-aware cursors and accurate interaction help
 

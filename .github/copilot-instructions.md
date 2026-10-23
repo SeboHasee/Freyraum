@@ -1,7 +1,7 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
-## Current context (v1.40)
+## Current context (v1.46)
 
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
@@ -13,11 +13,39 @@
   views: Schlafzimmer, Wohnraum, Wohnbereich, and Büro. Their cleaned derivatives
   preserve the original source photos. Keep photo-room artwork inside the viewport
   across aspect ratios; preserve the room camera and projective registration when
-  adjusting UI. A 2026-10-20 user screenshot again shows apparent top clipping in
+  adjusting UI. Room camera frames must stay composite-only (scene transform +
+  motion-only `.is-camera-moving`); never re-project or read layout per frame
+  (v1.43, lesson 130); un-anchored zoom-outs scale about their fixed point (v1.44, lesson 131). A 2026-10-20 user screenshot again shows apparent top clipping in
   Wohnbereich; its build/config identity is unknown, so treat visual acceptance as
   open and compare the matching generated artifact before assigning cause. See
   `README.md` → "Inspect in a photo room" and
   `ARCHITECTURE_MAP.md`.
+- Mobile (v1.41): all touch surfaces share `src/interaction/touchGestures.ts`
+  (momentum, rubber band, snapping, tap slop, double tap). Gallery gyro tilt runs
+  through `src/gallery/DeviceTiltController.ts` → `GalleryManager.setHoverTarget`.
+  Narrow-portrait hub is a continuous panorama with an artwork strip
+  (`src/hub/hubPanorama.ts`); never hide hub artworks by wall group. Phones
+  (v1.42): utilities sit in `src/ui/PhoneUtilityMenu.ts` (placed by
+  `placeUtilityControls` in `main.ts`); the compact info panel is a bottom sheet
+  with peek/half/full stops. v1.46: a single tap hides the phone chrome
+  (`data-phone-immersive` in `main.ts`); touch phones in landscape get a right
+  timeline rail (the phone query includes a landscape condition, lesson 139);
+  the photo room swipes between rooms at the fitted zoom. Pure tests:
+  `npm run test:touch-gestures`. Real-device acceptance is open (`docs/HANDOFF.md`).
+- Zoom (v1.46): gallery and room show a transient readout
+  (`src/ui/ZoomIndicator.ts`). Zoom moves that also change pan must ease pan
+  with the zoom's filter (`GalleryManager.coupledZoomPan`, room fixed-point
+  anchor) or the view slides sideways (lesson 140).
+- Links (v1.46): `?artwork=<id>&view=gallery` (`src/navigation/deepLink.ts`,
+  documented only in `docs/QUERY_PARAMETERS.md`); the address follows the
+  current artwork; "Link teilen" (`src/ui/shareLink.ts`) on http(s) only.
+- Download size (v1.46): the deployed manifest has no embedded image bytes
+  and lists WebP size variants (`scripts/build-web-images.mjs`, budget in
+  `validate:deploy`); the editor UI is a lazy chunk (`src/hub/editor/editorModules.ts`,
+  entry budget in `test:frame-budget`). Keep editor classes out of static
+  imports in `MainMuseumHub`. Hub/room background photos are served as
+  same-size WebP copies (`src/utils/webBackgrounds.ts`); the editor's
+  calibration view keeps the original PNG.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.
@@ -34,13 +62,16 @@
   writes only through `scripts/local-project/projectStore.ts` and serves only
   allowlisted files at `freyraum://app/`; `file://` download fallback.
 - Tests and CI: `docs/REGRESSION_TOOLING.md`. Active work: `plan.md`.
+  `npm test` runs every no-browser check and quality CI runs it; add new pure
+  checks there (lesson 141). Run SwiftShader browser suites one at a time with
+  no build or probe beside them (lesson 142); wait for transitions with
+  `settleAnimations`, never a fixed delay (lesson 138).
   Photo-room checks: `npm run test:gallery-room-view` and
   `npm run test:gallery-room-view:browser`. The latter checks file-photo display,
   shared selection, focus and control bounds across desktop/tablet/phone/short
-  landscape. Current geometry-suite issue: `npm run validate:museum-hub` still
-  fails at the wall-left doorway-height assertion in
-  `scripts/test-museum-hub-geometry.mjs:411`; the old timeline assertion was
-  corrected. History: `CHANGELOG.md` and `docs/archive/`.
+  landscape. Phone suite: `npm run test:mobile-browser` (panorama, chrome
+  coverage, phone menu, info sheet). `npm run validate:museum-hub` passes; it
+  checks curated customer values as ranges. History: `CHANGELOG.md` and `docs/archive/`.
 
 Use these repository-specific instructions before changing code or docs.
 

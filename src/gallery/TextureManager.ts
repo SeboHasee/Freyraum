@@ -547,6 +547,15 @@ export class TextureManager {
     return this.loadForRole(url, 'albedo');
   }
 
+  private isSameOriginUrl(url: string): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return new URL(url).origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
+
   /** Role-aware loader. Sets colour space and wrapping appropriate to the role. */
   loadForRole(url: string, role: PaintingMapRole): Promise<THREE.Texture> {
     const cacheKey = `${role}::${url}`;
@@ -558,7 +567,9 @@ export class TextureManager {
     // data URIs, relative paths, and file:// URLs must NOT use crossOrigin or
     // the browser cannot supply CORS headers, marking the image as tainted and
     // preventing WebGL from uploading the texture.
-    const isExternal = /^https?:\/\//i.test(url);
+    // v1.46: same-origin HTTP(S) needs no CORS and would otherwise miss the
+    // hub/timeline image cache entry (a CORS request is a separate fetch).
+    const isExternal = /^https?:\/\//i.test(url) && !this.isSameOriginUrl(url);
     const loader = isExternal ? this.externalLoader : this.localLoader;
     const urlType = this.classifyUrlType(url);
 

@@ -138,9 +138,11 @@ async function main() {
     await openTab(page, 'room');
     const photoRoomEditor = page.locator('.museum-hub__gallery-room-editor');
     const photoRoomSelector = photoRoomEditor.locator('select');
+    // v1.46: the configured photo-room count comes from the export (4 since v1.42).
+    const roomBeforeCount = (await readExport(page)).galleryRoomViews.length;
     check(
-      await photoRoomEditor.isVisible() && await photoRoomSelector.locator('option').count() === 2,
-      'Raum tab exposes both configured photo rooms'
+      await photoRoomEditor.isVisible() && await photoRoomSelector.locator('option').count() === roomBeforeCount,
+      `Raum tab exposes all ${roomBeforeCount} configured photo rooms`
     );
     check(
       await photoRoomEditor.locator('.museum-hub__gallery-room-preview img').count() === 2,

@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -32,77 +32,6 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - **Signing (future):** builds are unsigned (one-time SmartScreen/Gatekeeper
   warning). Adding the signing secrets listed in `docs/DESKTOP_APP.md` signs
   them without workflow changes; automatic updates require signing first.
-
-## Photo-room controls and current validation (2026-10-20)
-
-- **Reopened screenshot issue:** the user-supplied
-  [Wohnbereich capture](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe)
-  shows the selected artwork clipped at the viewport top. The reported image does
-  not identify its build/config/camera state; match those before attributing cause.
-  Although the configured geometry/browser fixtures pass whole-artwork bounds,
-  do not claim customer-visible framing is fixed until this capture is reproduced
-  or superseded by a verified current-build screenshot.
-- **Current-build replay:** on 2026-10-20, `npm run build` generated the local
-  preview with bundle `bundle-d98e87c7c0f0` from source revision `8d0c4a5`.
-  The file-preview browser test passed at 2000×1080 with Wohnbereich selected and
-  the camera reset; the entire artwork and controls remain within the viewport.
-  Captures now wait two animation frames: an immediate capture had only the
-  neutral wall color, while the synchronized capture contains photo pixels
-  (sampled mean absolute RGB difference 10.12 from the centered-cover source crop).
-  The screenshot is `/tmp/freyraum-presentation-sync-20261020/room-wohn-bereich-2000x1080.png`.
-  This is a current local artifact, not a reproduction of the customer's unknown
-  bundle/browser zoom/camera state, so the reported screenshot remains open.
-- Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
-  and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
-  remain preserved; structural pixel regressions check cleanup seams and
-  painting/frame removal for each source. Wohnbereich's wall quad was recalibrated
-  to the visible wall after centered `cover` cropping, and projection/browser tests
-  check whole-artwork bounds across portrait, 3:4, and square artwork ratios.
-- Upscaling was evaluated and rejected: the available sources are 1896–2000 px
-  wide, and a 2× Lanczos candidate increased PNG/download and decoded image costs
-  without adding source detail. The cleaned derivatives retain source dimensions
-  with gentle native-size sharpening.
-- Run Update Gallery after pulling these changes so all four configured photos are
-  staged for the local `file://` preview.
-- The photo room reuses the gallery's single artwork timeline and selected-work
-  state. It also uses the gallery-style return and zoom/reset controls and the
-  shared help, audio, settings, and fullscreen widgets. The room selector is
-  distinct from artwork selection.
-- The control layout and complete artwork bounds were checked at desktop, tablet,
-  portrait-phone, and short-landscape sizes. Normal-size browser captures of all
-  four rooms were reviewed; the bedroom repair received subtle wall-matched
-  microtexture after its center appeared smoother than the nearby wall. Fresh
-  captures were generated after rebuilding; customer acceptance remains open.
-- Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
-  `npm run test:gallery-room-view`, and the browser suite's cursor, four-photo
-  decode, and responsive control/bounds checks.
-- **Current browser-suite limitation:** the latest complete run times out at the
-  exact maximum-zoom assertion in `scripts/test-gallery-room-view-browser.mjs`
-  (`scale(5.99409)` vs. `6`). Do not report that full browser suite as passing;
-  the remaining terminal-zoom discrepancy is tracked in `plan.md` and `FINDINGS.md`.
-- The four-room browser run decoded each background and checked full artwork and
-  control bounds at desktop, tablet, portrait phone, short landscape, and the
-  reported 2000×1080 viewport. Deploy validation, deploy-content tests, front-wall
-  aspect, WebGL resilience, frame-budget, photo-room, and config-authority checks
-  passed. `npm audit --omit=dev --audit-level=moderate` reports no production
-  vulnerabilities; the full dependency audit reports 17 existing development-tool
-  advisories (1 moderate, 16 high), with no dependency changes made.
-- Build output retains classic-script and large-chunk warnings. Import reports the
-  existing large Fraktal asset (about 97 MB decoded on GPU), missing optional
-  Wunderbaum text, and empty alt fields for Akt 27 and Fraktal. The full Type A
-  visual harness could not run because optional Playwright tooling is not installed.
-- Static deployment validation passed, but the production-base browser smoke and
-  post-merge live Pages smoke were not run. The branch is not deployed; static
-  content checks and the tested root `file://` preview do not establish live status.
-- `npm run validate:museum-hub` now passes the former stale timeline assertion
-  after its test was corrected to check the active timeline thumbnail. It still
-  fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway
-  height expectation. Current normalized spans are about 2.692 m (left) and
-  2.486 m (right), while the test expects 2.30 m. This coordinate-model discrepancy
-  remains unresolved; do not report the complete museum-hub suite as passing.
-- The earlier full Markdown audit covered 36 current documents and left seven dated
-  archive snapshots unchanged. This targeted follow-up updates the relevant active
-  handoff, tooling, plan, findings, and changelog documents only.
 
 ## Customer presentation run-through
 
@@ -162,60 +91,123 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-20)
+## Merge state (v1.41–v1.46, 2026-10-22)
 
-1. Read `README.md`, active `plan.md`, latest `FINDINGS.md`, and
-   `docs/REGRESSION_TOOLING.md` before changing the photo room or hub. The current
-   photo-room view shares the gallery's selected artwork and timeline; it is a
-   bounded 2D camera and must not change the artwork's projective registration.
-2. The customer confirmed the local four-artwork museum after **Update
-   Gallery.bat** on 2026-10-18 and supplied
-   [a screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa).
-   This is local evidence, not proof of a live deployed build.
-3. Generated customer globals are ignored by Git. After a fresh download or JSON
-   change run Update Gallery; developers use full `npm run build` (imports first).
-   Injected config intentionally wins over the compiled fallback. Local output
-   uses relative URLs; production uses `/Freyraum/`.
-4. Focused photo-room structural and browser tests, lint, typecheck, and build
-   pass. The geometry suite remains blocked at the wall-left doorway-height
-   expectation (`scripts/test-museum-hub-geometry.mjs:411`), after the stale
-   timeline assertion was corrected. Do not claim a complete geometry-suite pass.
-5. Post-merge live Pages verification and customer visual acceptance remain
-   separate from local/browser checks. See `docs/DEPLOYMENT.md`; avoid relying on
-   stale workflow-run IDs from earlier handoffs.
-6. Deferred items include software-Chrome visual-harness investigations, existing
-   dependency advisories, the large Fraktal source/bundle, missing optional
-   text/alt metadata, desktop signing, and online-service setup.
+- Branch/PR #27 (`copilot/mobile-view-optimizations`) is ready to merge;
+  `main` holds v1.33–v1.40. v1.41–v1.42 rebuilt the phone experience,
+  v1.43–v1.44 the desktop room zoom, v1.45 worked through the previous
+  handoff, v1.46 cut downloads and finished the phone feel (`CHANGELOG.md`).
+- v1.46 in short: deployed manifest without image bytes and WebP size
+  variants (`scripts/build-web-images.mjs`, `src/utils/artworkImageSources.ts`),
+  WebP background copies (`src/utils/webBackgrounds.ts`; the editor's
+  calibration view keeps the PNG), lazy editor chunk
+  (`src/hub/editor/editorModules.ts`), info-sheet stops, photo-room swipe,
+  landscape timeline rail, tap-to-hide phone chrome (`setPhoneImmersive` in
+  `src/main.ts`), zoom readout (`src/ui/ZoomIndicator.ts`), gallery zoom fixed
+  point (`GalleryManager.coupledZoomPan`), deep links
+  (`src/navigation/deepLink.ts`) with "Link teilen" (`src/ui/shareLink.ts`),
+  and `npm test` = all no-browser checks (quality CI runs it). Numbers:
+  `FINDINGS.md` (v1.46). Phone visit: 18.6 MB → 4.8 MB.
+- Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
+  WebP variants; without sharp the site falls back to the originals with a
+  `validate:deploy` warning. The customer's "Update Gallery" does not run it.
+- Earlier handoff sections are archived in
+  `docs/archive/handoff-history-2026-10-22.md` and
+  `docs/archive/handoff-history-2026-10-22-v1.46.md`.
 
-Temporary `/tmp` captures from earlier sessions may not survive a fresh agent.
-Regenerate evidence from the matching bundle and record the commit/environment.
+### v1.46 validation (2026-10-22)
+
+All run on the branch head; browser suites one at a time:
+
+- `npm run docs:check-config-authority`, `npm run lint`,
+  `npm run build:typecheck`, `npm run build`, `npm test`,
+  `npm run test:frame-budget`, `npm run validate:museum-hub`,
+  `npm run validate:deploy`.
+- Photo-room browser suite: 42 checks pass (incl. flick glide, zoom readout).
+- `npm run test:mobile-browser` passes (incl. immersive view and landscape
+  rail). Known intermittent: the sheet step half → full (90 px handle drag)
+  timed out in two runs; reruns passed. The check now prints the sheet stop,
+  classes and the element under the handle, so the next failure shows whether
+  the drag missed the handle or the stop logic declined it.
+- Production-base smoke (`test:deploy-smoke` against a local `/Freyraum/`
+  server) passes; it is not deployment evidence.
+- One suite run failed while a build and probes ran beside it (lesson 142).
+
+## Next-agent starting point
+
+- Read `plan.md` → "Next development round" (deferred items D1, C5, D2, D4,
+  E1/E2/E4/E5, F) and `FINDINGS.md` (2026-10-21/22), then `ARCHITECTURE_MAP.md`.
+- New touch surfaces use `src/interaction/touchGestures.ts`; zoom steps use
+  its shared curve (`wheelZoomFactor`, `ZOOM_STEP_FACTOR`); utility-control
+  placement belongs only to `placeUtilityControls()` in `src/main.ts`.
+- Checks: `npm test`, `npm run validate:museum-hub`, and after
+  `npm run build` the photo-room browser suite and `npm run test:mobile-browser`
+  (`docs/REGRESSION_TOOLING.md`). Run browser suites one at a time with no
+  build or probe beside them, and stop stray headless Chrome between runs.
+- Measure DOM-camera smoothness with `npm run measure:room-zoom`, not headless
+  frame counts (lesson 130). Under SwiftShader, poll end states (lesson 132)
+  and wait for transitions with `settleAnimations` (lesson 138).
+- Customer decisions with defaults in place: loading colour (wall grey
+  `#c7ced4`), gyro default (auto on Android, opt-in on iOS), hub snapping (soft),
+  photo-room zoom cap 6×.
+
+## Open items
+
+### Owner and customer gates (cannot be done by an agent)
+
+1. Click **Approve and run** for the CI checks on PR #27, then merge.
+2. Live `/Freyraum/` smoke after the post-merge Pages deploy
+   (`docs/DEPLOYMENT.md`); only that proves deployed content. Try a shared
+   link (`?artwork=<id>&view=gallery`) on the live site too.
+3. Real phones (iOS Safari, Android Chrome; portrait and landscape): gyro feel,
+   flick feel, hub strip, info sheet stops, tap to hide the controls,
+   landscape rail, room swipe and pinch, "Link teilen", loading and
+   browser-bar colours.
+4. Real desktop GPU (Chrome/Edge/Firefox, mouse and trackpad): zoom feel in
+   both views, zoom readout, reset without sideways slide, and whether the
+   motion layer looks soft during zoom-in (decides D1).
+5. Customer review of the four cleaned room photos, hub shadows and controls at
+   normal display size; confirm the defaults listed above.
+6. Content: missing optional Wunderbaum text, empty alt texts for Akt 27 and
+   Fraktal, and placeholder ("Lorem ipsum") descriptions in the sidecar texts.
+7. Desktop app: install the Windows artifact on the customer PC; optional first
+   release; online-save setup (`docs/ONLINE_EDITOR_SETUP.md`); signing later.
+
+### Engineering (tracked in `plan.md`)
+
+- Wohnbereich top-clipping screenshot (2026-10-20): reproduce with the exact
+  bundle/room/camera state; current local artifacts do not clip.
+- Software-Chrome visual harness stops at the runtime invariant
+  `shadow-casting light count 1 != expected 2`; no Type A capture is claimed.
+- Fraktal uses a 4096 px (desktop, ~67 MB GPU) or 2048 px (phone, ~17 MB)
+  WebP on the deployed site; the local `file://` preview still uses the
+  original. The build keeps the large-chunk warning (three.js; entry budget
+  1.15 MB in `test:frame-budget`); dev-tool advisories only (0 production).
+- Deferred v1.46 items: `plan.md` → "Next development round".
+
+### Ideas for further development (brainstorm)
+
+- Hub panorama: pinch-to-zoom with the shared model; slide the next room's
+  photo in during an edge pull (C5).
+- Gallery: long-press for artwork details; timeline auto-hide.
+- Photo room: background parallax driven by the tilt.
+- PWA: manifest + offline cache of the published artworks.
+- Accessibility: larger-text layout checks; "reduce chrome" toggle.
+- Content: audio guide per artwork, curator-chosen exhibitions, visitor-facing
+  metadata sheets.
+- Tooling: real-device diagnostics overlay (gyro permission, DPR, safe areas,
+  frame time); Lighthouse mobile budget; visual baselines per phone viewport;
+  photo-room browser suite split per viewport for parallel CI jobs.
 
 ## Handoff checklist
 
 - [x] Current behavior validated against runtime code and focused regressions
 - [x] Canonical docs linked (not duplicated)
-- [x] Local update confirmed by customer; production-build smoke verified
+- [x] Local update confirmed by customer (2026-10-18)
+- [x] Done items removed from follow-up lists; history archived (2026-10-22)
 - [x] Asset-size constraints and publish-path assumptions explicitly handed off
 - [x] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Owner completes CI approval, merge, and new live Pages smoke verification
-
-## 2026-10-20 full Markdown audit matrix
-
-| Class | Reviewed files | Audit outcome |
-|---|---|---|
-| Canonical (9) | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current photo-room framing caveat, interaction-help details, and pan-cursor behavior are recorded; geometry-suite status remains documented |
-| Operational (14) | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md`, `docs/DEPENDENCY_MAINTENANCE_PLAN.md`, `docs/DEPLOYMENT.md`, `docs/DESKTOP_APP.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/ONLINE_EDITOR_SETUP.md`, `docs/QUERY_PARAMETERS.md`, `docs/REGRESSION_TOOLING.md`, `docs/ai-feedback/AI_FEEDBACK_LOOP.md`, `docs/architecture/README.md`, `docs/lessons-learned/README.md`, `docs/standards/CODING_GUIDELINES.md` | Customer photo-room guidance distinguishes zoomed panning from wheel/pinch/button zoom; handoff and regression tooling clarify that fixture success does not replace visual acceptance |
-| Agent/template (5) | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/review.prompt.md` | Current repository context and prompts refreshed; Copilot guidance records the open screenshot uncertainty |
-| Historical/index (8) | `docs/archive/README.md`, `docs/archive/architecture-map-history-2026-06-21.md`, `docs/archive/findings-history-2026-06-21.md`, `docs/archive/findings-history-2026-10-17.md`, `docs/archive/handoff-history-2026-06-21.md`, `docs/archive/plan-history-2026-06-21.md`, `docs/archive/plan-history-2026-10-17.md`, `docs/archive/readme-history-2026-06-21.md` | Index reviewed and dated; seven historical snapshots remain unchanged under the archive immutability rule; no active work was moved to history |
-
-All 36 tracked Markdown files outside the prohibited agent-instruction directory
-were inventoried. The 29 current documents (including the archive index) were
-checked and their audit markers updated; archived snapshots retain their original
-dates and claims by design.
-
-The merge-readiness follow-up rechecked the README, customer picture guide,
-changelog, active plan/findings, handoff, and regression instructions against the
-current cursor behavior and browser test. Archived snapshots remain immutable.
 
 ## Canonical references
 

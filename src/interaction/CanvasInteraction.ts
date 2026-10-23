@@ -1,5 +1,15 @@
 import { GalleryManager } from '../gallery/GalleryManager';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import {
+  DOUBLE_TAP_MS,
+  DoubleTapDetector,
+  exceedsTapSlop,
+  hapticTick,
+  normalizeWheelDelta,
+  resolveSwipeDirection,
+  VelocityTracker,
+  wheelZoomFactor,
+} from './touchGestures';
 
 /**
  * v0.11 — Unified canvas interaction layer.
@@ -32,6 +42,7 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 
 type GestureState =
   | 'idle'
+  | 'pending'
   | 'panning'
   | 'pinching'
   | 'swipe-candidate'
@@ -61,9 +72,16 @@ export class CanvasInteraction {
   private state: GestureState = 'idle';
   private readonly active = new Map<number, PointerSlot>();
   private lastPinchDist = 0;
+  private lastPinchCenter = { x: 0, y: 0 };
   private pointerDragStarted = false;
-  /** Tracks whether the most recent gesture started as touch; used to
-   *  suppress hover rotation immediately after a tap on touch laptops. */
+  /** v1.41 — release velocity for pan momentum and swipe flicks. */
+  private readonly velocity = new VelocityTracker();
+  private readonly doubleTap = new DoubleTapDetector();
+  /** A pinch ended with one finger still down: ignore it until release. */
+  private pinchTail = false;
+  /** v1.46 — touch/pen single tap, fired once the double-tap window passed. */
+  onSingleTap: (() => void) | null = null;
+  private singleTapTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(canvas: HTMLCanvasElement, galleryManager: GalleryManager) {
     this.canvas = canvas;
@@ -89,6 +107,7 @@ export class CanvasInteraction {
       window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true });
       window.addEventListener('pointerup', this.onGlobalPointerUp, { passive: true });
       window.addEventListener('pointercancel', this.onGlobalPointerCancel, { passive: true });
+      this.canvas.addEventListener('dblclick', this.onDoubleClick);
     } else {
       // Touch Events fallback (older iOS Safari only). Non-passive for
       // touchstart/touchmove because we need `preventDefault()` to own
@@ -103,9 +122,10 @@ export class CanvasInteraction {
       window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
     }
 
-    // Wheel zoom remains passive — no preventDefault needed; the canvas
-    // is fixed and there is no page scroll to fight.
-    this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+    // v1.43: non-passive only so a trackpad pinch (ctrl+wheel) zooms the
+    // artwork instead of the browser page; plain wheels have no page scroll
+    // to fight and are not prevented.
+    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
 
     this.diagnostics.info('init', 'Canvas interaction initialised', {
       backend: this.usePointerEvents ? 'pointer-events' : 'touch-events-fallback',
@@ -114,10 +134,17 @@ export class CanvasInteraction {
 
   // ---------------------------------------------------------------------------
   // Pointer Events path (modern browsers)
+  //
+  // v1.41 — shared touch model with the photo room: a press only becomes a
+  // drag after TAP_SLOP_PX; zoomed-in drags pan 1:1 under the finger and
+  // coast with momentum/rubber-band after release; pinch zoom multiplies the
+  // camera distance anchored between the fingers; at the fitted view the
+  // artwork follows a horizontal swipe and navigates on distance or flick.
   // ---------------------------------------------------------------------------
 
   private onPointerDown = (e: PointerEvent): void => {
     if (!this.enabled) return;
+    this.cancelSingleTap();
     // Mouse-only: reject non-primary buttons.
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -139,7 +166,10 @@ export class CanvasInteraction {
     this.pointerDragStarted = false;
 
     if (this.active.size === 1) {
-      this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
+      this.pinchTail = false;
+      this.velocity.reset();
+      this.velocity.add(e.timeStamp, e.clientX, e.clientY);
+      this.state = 'pending';
       this.diagnostics.debug('gesture-start', 'Pointer gesture started', {
         pointerType: e.pointerType,
         state: this.state,
@@ -147,7 +177,10 @@ export class CanvasInteraction {
     } else if (this.active.size === 2) {
       const pts = [...this.active.values()];
       this.lastPinchDist = distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY);
+      this.lastPinchCenter = this.localPoint((pts[0].lastX + pts[1].lastX) / 2, (pts[0].lastY + pts[1].lastY) / 2);
+      if (this.state === 'swipe-candidate') this.galleryManager.setSwipePreview(0);
       this.state = 'pinching';
+      this.galleryManager.beginDirectGesture();
       this.diagnostics.debug('gesture-start', 'Pinch gesture started', {});
     }
     this.syncPanCursor();
@@ -185,22 +218,42 @@ export class CanvasInteraction {
     slot.lastX = e.clientX;
     slot.lastY = e.clientY;
 
-    if (this.state === 'pinching' && this.active.size === 2) {
+    if (this.state === 'pinching' && this.active.size >= 2) {
       const pts = [...this.active.values()];
-      const dist = distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY);
-      const delta = this.lastPinchDist - dist;
+      const dist = Math.max(1, distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY));
+      const center = this.localPoint((pts[0].lastX + pts[1].lastX) / 2, (pts[0].lastY + pts[1].lastY) / 2);
+      const factor = dist / Math.max(1, this.lastPinchDist);
       this.lastPinchDist = dist;
-      this.galleryManager.addZoomDelta(delta * 0.02);
+      // Two-finger translation pans; the spread zooms around the midpoint.
+      this.galleryManager.panByPixels(center.x - this.lastPinchCenter.x, center.y - this.lastPinchCenter.y);
+      this.galleryManager.zoomByFactorAt(factor, center.x, center.y);
+      this.lastPinchCenter = center;
+      this.syncPanCursor();
       return;
     }
 
-    if (this.active.size === 1) {
+    if (this.active.size !== 1 || this.pinchTail) return;
+    this.velocity.add(e.timeStamp, e.clientX, e.clientY);
+
+    if (this.state === 'pending') {
+      if (!exceedsTapSlop(e.clientX - slot.startX, e.clientY - slot.startY)) return;
       if (this.galleryManager.canPan()) {
         this.state = 'panning';
-        this.pointerDragStarted ||= dx !== 0 || dy !== 0;
-        this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+        this.galleryManager.beginDirectGesture();
+        // Include the slop distance so the content stays under the finger.
+        this.galleryManager.panByPixels(e.clientX - slot.startX - dx, e.clientY - slot.startY - dy);
+      } else {
+        this.state = 'swipe-candidate';
       }
-      // swipe-candidate: do nothing during move; resolved on pointerup.
+    }
+
+    if (this.state === 'panning') {
+      this.pointerDragStarted ||= dx !== 0 || dy !== 0;
+      this.galleryManager.panByPixels(dx, dy);
+    } else if (this.state === 'swipe-candidate') {
+      const totalX = e.clientX - slot.startX;
+      const totalY = e.clientY - slot.startY;
+      this.galleryManager.setSwipePreview(Math.abs(totalX) > Math.abs(totalY) ? totalX : 0);
     }
     this.syncPanCursor();
   }
@@ -212,6 +265,7 @@ export class CanvasInteraction {
   private onPointerUp = (e: PointerEvent): void => {
     if (!this.enabled) return;
     const slot = this.active.get(e.pointerId);
+    if (!slot) return;
     this.active.delete(e.pointerId);
     try {
       this.canvas.releasePointerCapture(e.pointerId);
@@ -219,24 +273,73 @@ export class CanvasInteraction {
       /* ignore */
     }
 
-    if (this.state === 'pinching' && this.active.size < 2) {
-      // One finger left after pinch ends — fall back to panning state.
-      this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
+    if (this.state === 'pinching' && this.active.size >= 1) {
+      if (this.active.size >= 2) {
+        const pts = [...this.active.values()];
+        this.lastPinchDist = distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY);
+        this.lastPinchCenter = this.localPoint((pts[0].lastX + pts[1].lastX) / 2, (pts[0].lastY + pts[1].lastY) / 2);
+        return;
+      }
+      // One finger left after the pinch: finish the pinch without a jump and
+      // ignore the remaining finger until it lifts.
+      this.galleryManager.endDirectGesture(0, 0);
+      this.pinchTail = true;
+      this.state = 'cancelled';
       this.pointerDragStarted = false;
       this.syncPanCursor();
       return;
     }
 
-    if (this.state === 'swipe-candidate' && slot && this.active.size === 0) {
-      this.resolveSwipe(slot, e.clientX, e.clientY);
-    }
-
     if (this.active.size === 0) {
+      this.velocity.add(e.timeStamp, e.clientX, e.clientY);
+      const velocity = this.velocity.velocity(e.timeStamp);
+      if (this.state === 'panning') {
+        this.galleryManager.endDirectGesture(velocity.x, velocity.y);
+      } else if (this.state === 'swipe-candidate') {
+        this.resolveSwipe(slot, e.clientX, e.clientY, velocity.x);
+      } else if (this.state === 'pending' && !this.pinchTail) {
+        this.handleTap(e);
+      }
       this.state = 'idle';
+      this.pinchTail = false;
       this.pointerDragStarted = false;
     }
     this.syncPanCursor();
   };
+
+  private handleTap(e: PointerEvent): void {
+    // Mouse double-clicks arrive through `dblclick`; touch/pen use the detector.
+    if (e.pointerType === 'mouse') return;
+    if (!this.doubleTap.tap(e.timeStamp, e.clientX, e.clientY)) {
+      if (this.onSingleTap) {
+        this.singleTapTimer = setTimeout(() => {
+          this.singleTapTimer = null;
+          if (this.enabled) this.onSingleTap?.();
+        }, DOUBLE_TAP_MS);
+      }
+      return;
+    }
+    const point = this.localPoint(e.clientX, e.clientY);
+    this.galleryManager.toggleZoomAt(point.x, point.y);
+    hapticTick();
+  }
+
+  private cancelSingleTap(): void {
+    if (this.singleTapTimer === null) return;
+    clearTimeout(this.singleTapTimer);
+    this.singleTapTimer = null;
+  }
+
+  private onDoubleClick = (e: MouseEvent): void => {
+    if (!this.enabled) return;
+    const point = this.localPoint(e.clientX, e.clientY);
+    this.galleryManager.toggleZoomAt(point.x, point.y);
+  };
+
+  private localPoint(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
 
   private onGlobalPointerUp = (e: PointerEvent): void => {
     if (e.target === this.canvas) return;
@@ -245,9 +348,12 @@ export class CanvasInteraction {
 
   private onPointerCancel = (e: PointerEvent): void => {
     if (!this.enabled) return;
-    this.active.delete(e.pointerId);
+    if (!this.active.delete(e.pointerId)) return;
     if (this.active.size === 0) {
+      if (this.state === 'swipe-candidate') this.galleryManager.setSwipePreview(0);
+      this.galleryManager.endDirectGesture(0, 0);
       this.state = 'idle';
+      this.pinchTail = false;
       this.pointerDragStarted = false;
       this.diagnostics.debug('gesture-cancel', 'Pointer gesture cancelled', {});
     }
@@ -274,9 +380,13 @@ export class CanvasInteraction {
       const t = e.touches[0];
       this.active.clear();
       this.active.set(0, { id: 0, startX: t.clientX, startY: t.clientY, lastX: t.clientX, lastY: t.clientY });
+      this.velocity.reset();
+      this.velocity.add(e.timeStamp, t.clientX, t.clientY);
       this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
+      if (this.state === 'panning') this.galleryManager.beginDirectGesture();
     } else if (e.touches.length === 2) {
       this.state = 'pinching';
+      this.galleryManager.beginDirectGesture();
       this.lastPinchDist = this.getTouchDist(e);
     }
   };
@@ -286,10 +396,14 @@ export class CanvasInteraction {
     if (e.touches.length >= 2) {
       // Own the pinch gesture (Bug 2). Browser must not run native zoom.
       if (e.cancelable) e.preventDefault();
-      const dist = this.getTouchDist(e);
-      const delta = this.lastPinchDist - dist;
+      const dist = Math.max(1, this.getTouchDist(e));
+      const factor = dist / Math.max(1, this.lastPinchDist);
       this.lastPinchDist = dist;
-      this.galleryManager.addZoomDelta(delta * 0.02);
+      const center = this.localPoint(
+        (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        (e.touches[0].clientY + e.touches[1].clientY) / 2
+      );
+      this.galleryManager.zoomByFactorAt(factor, center.x, center.y);
       this.state = 'pinching';
       return;
     }
@@ -303,11 +417,11 @@ export class CanvasInteraction {
     slot.lastX = t.clientX;
     slot.lastY = t.clientY;
 
-    if (this.galleryManager.canPan()) {
+    this.velocity.add(e.timeStamp, t.clientX, t.clientY);
+    if (this.state === 'panning') {
       // Own the pan when zoomed so the page does not drift.
       if (e.cancelable) e.preventDefault();
-      this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
-      this.state = 'panning';
+      this.galleryManager.panByPixels(dx, dy);
     }
   };
 
@@ -320,9 +434,21 @@ export class CanvasInteraction {
     if (!this.enabled) return;
     if (this.state === 'swipe-candidate' && e.changedTouches.length > 0) {
       const slot = this.active.get(0);
-      if (slot) this.resolveSwipe(slot, e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      if (slot) {
+        this.resolveSwipe(
+          slot,
+          e.changedTouches[0].clientX,
+          e.changedTouches[0].clientY,
+          this.velocity.velocity(e.timeStamp).x
+        );
+      }
     }
     if (e.touches.length === 0) {
+      const velocity = this.velocity.velocity(e.timeStamp);
+      this.galleryManager.endDirectGesture(
+        this.state === 'panning' ? velocity.x : 0,
+        this.state === 'panning' ? velocity.y : 0
+      );
       this.active.clear();
       this.state = 'idle';
       this.pointerDragStarted = false;
@@ -341,7 +467,10 @@ export class CanvasInteraction {
 
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled) return;
-    this.galleryManager.addZoomDelta(e.deltaY * 0.0045);
+    if (e.ctrlKey) e.preventDefault();
+    this.galleryManager.zoomByFactor(
+      wheelZoomFactor(normalizeWheelDelta(e.deltaY, e.deltaMode, window.innerHeight), e.ctrlKey)
+    );
   };
 
   private onLegacyMouseMove = (e: MouseEvent): void => {
@@ -364,14 +493,20 @@ export class CanvasInteraction {
     this.galleryManager.setHoverTarget(normalizedX * hoverScale.x, normalizedY * hoverScale.y);
   }
 
-  private resolveSwipe(slot: PointerSlot, endX: number, endY: number): void {
+  private resolveSwipe(slot: PointerSlot, endX: number, endY: number, velocityX = 0): void {
     const dx = endX - slot.startX;
     const dy = endY - slot.startY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > SWIPE_THRESHOLD_PX) {
-      // WCAG SC 2.5.2 — activate on up-event (the swipe is resolved here,
-      // on pointerup/touchend), not on initial pointer down.
-      this.galleryManager.navigate(dx < 0 ? 1 : -1);
-      this.diagnostics.debug('swipe', 'Swipe resolved', { direction: dx < 0 ? 'next' : 'prev' });
+    // WCAG SC 2.5.2 — activate on up-event (the swipe is resolved here,
+    // on pointerup/touchend), not on initial pointer down. v1.41: a fast
+    // flick navigates before the distance threshold.
+    const direction = resolveSwipeDirection(dx, dy, velocityX, SWIPE_THRESHOLD_PX);
+    if (direction !== 0) {
+      this.galleryManager.clearSwipePreview();
+      this.galleryManager.navigate(direction);
+      hapticTick();
+      this.diagnostics.debug('swipe', 'Swipe resolved', { direction: direction > 0 ? 'next' : 'prev' });
+    } else {
+      this.galleryManager.setSwipePreview(0);
     }
   }
 
@@ -379,7 +514,11 @@ export class CanvasInteraction {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) {
+      this.cancelSingleTap();
       this.active.clear();
+      this.galleryManager.endDirectGesture(0, 0);
+      this.galleryManager.setSwipePreview(0);
+      this.pinchTail = false;
       this.state = 'idle';
       this.galleryManager.setHoverTarget(0, 0);
     }
@@ -398,6 +537,7 @@ export class CanvasInteraction {
     // v0.16 — dispose idempotency. See `disposed` field.
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelSingleTap();
     if (this.usePointerEvents) {
       this.canvas.removeEventListener('pointerdown', this.onPointerDown);
       this.canvas.removeEventListener('pointermove', this.onPointerMove);
@@ -408,6 +548,7 @@ export class CanvasInteraction {
       window.removeEventListener('pointermove', this.onGlobalPointerMove);
       window.removeEventListener('pointerup', this.onGlobalPointerUp);
       window.removeEventListener('pointercancel', this.onGlobalPointerCancel);
+      this.canvas.removeEventListener('dblclick', this.onDoubleClick);
     } else {
       this.canvas.removeEventListener('touchstart', this.onTouchStart);
       this.canvas.removeEventListener('touchmove', this.onTouchMove);

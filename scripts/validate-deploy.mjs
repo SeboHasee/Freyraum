@@ -23,6 +23,8 @@ export const MAX_INBOX_IMAGE_BYTES = 50 * 1024 * 1024;
 export const WARN_INBOX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_BACKGROUND_BYTES = 25 * 1024 * 1024;
 export const MAX_SIDECAR_BYTES = 64 * 1024;
+// v1.46 — the deployed manifest is a blocking script: metadata only, no image bytes.
+export const MAX_DEPLOY_MANIFEST_BYTES = 2 * 1024 * 1024;
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|svg|avif)$/i;
 
@@ -135,6 +137,62 @@ export function validateDeploy(root) {
             ? `artwork ${entry.id}: image "${file}" differs in upper/lower case from "${caseMatch}".`
             : `artwork ${entry.id}: image "${file}" is missing from customer-preview/images.`
         );
+      }
+    }
+  }
+
+  // ── Deployed manifest (public/customer-artworks.js, v1.46) ─────────────
+  const deployManifestPath = join(root, 'public', 'customer-artworks.js');
+  if (!existsSync(deployManifestPath)) {
+    issues.warnings.push('public/customer-artworks.js is missing. Run `npm run import:artworks` before building.');
+  } else {
+    const size = statSync(deployManifestPath).size;
+    if (size > MAX_DEPLOY_MANIFEST_BYTES) {
+      issues.errors.push(
+        `public/customer-artworks.js is ${(size / 1048576).toFixed(1)} MB (max ${MAX_DEPLOY_MANIFEST_BYTES / 1048576} MB). ` +
+          'Every visitor downloads it before the gallery starts.'
+      );
+    }
+    if (/"webglImage"\s*:|data:image\//.test(readFileSync(deployManifestPath, 'utf8'))) {
+      issues.errors.push(
+        'public/customer-artworks.js embeds image bytes. The deployed site loads images from images/; ' +
+          'embedded copies belong only in the local preview (customer-preview/customer-artworks.js).'
+      );
+    }
+    // v1.46 (B2/B4): every listed WebP file must exist; without the maps the
+    // site falls back to the originals (warning only).
+    const deployManifestText = readFileSync(deployManifestPath, 'utf8');
+    const readMap = (name) => {
+      const match = new RegExp(`^window\\.${name} = (\\{.*\\});\\s*$`, 'm').exec(deployManifestText);
+      if (!match) return null;
+      try {
+        return JSON.parse(match[1]);
+      } catch {
+        issues.errors.push(`public/customer-artworks.js: ${name} is not valid JSON.`);
+        return {};
+      }
+    };
+    const webImages = readMap('__FREYRAUM_WEB_IMAGES');
+    if (!webImages) {
+      issues.warnings.push(
+        'public/customer-artworks.js has no web image variants; visitors download the full original images. ' +
+          'Run `npm ci` (installs sharp) and `npm run import:artworks`.'
+      );
+    }
+    const listed = [];
+    for (const [id, variants] of Object.entries(webImages ?? {})) {
+      for (const variant of Array.isArray(variants) ? variants : []) {
+        listed.push({ owner: id, src: typeof variant?.src === 'string' ? variant.src : '' });
+      }
+    }
+    for (const [key, src] of Object.entries(readMap('__FREYRAUM_WEB_BACKGROUNDS') ?? {})) {
+      listed.push({ owner: key, src: typeof src === 'string' ? src : '' });
+    }
+    for (const { owner, src } of listed) {
+      if (!/^\.\/web-images\/[A-Za-z0-9_-]+-\d+-[0-9a-f]+\.webp$/.test(src)) {
+        issues.errors.push(`web images: "${owner}" lists an invalid path "${src}".`);
+      } else if (!existsSync(join(root, 'public', src.slice(2)))) {
+        issues.errors.push(`web images: public/${src.slice(2)} for "${owner}" is missing. Re-run \`npm run import:artworks\`.`);
       }
     }
   }

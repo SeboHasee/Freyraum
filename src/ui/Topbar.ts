@@ -122,6 +122,13 @@ export class Topbar {
 
   restoreHelpButton(): void {
     this.rightGroup.appendChild(this.helpBtn);
+    this.el.classList.remove('topbar--has-menu');
+  }
+
+  /** v1.42 — phones: the "more" menu takes the help button's topbar place. */
+  setUtilityMenu(menu: HTMLElement): void {
+    this.rightGroup.appendChild(menu);
+    this.el.classList.add('topbar--has-menu');
   }
 
   dispose(): void {

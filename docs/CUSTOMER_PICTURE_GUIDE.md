@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This guide documents the current customer workflow only.
 
@@ -98,8 +98,12 @@ When zoomed in and the photo bounds allow movement, drag the photo to pan. Use t
 mouse wheel, pinch, or grouped zoom buttons to zoom, and **Fotoansicht
 zurücksetzen** to restore it. The artwork stays the same configured size on the
 wall and grows on screen together with the photo as you zoom. Zoom buttons smoothly
-bring the artwork center toward the screen center, while wheel and pinch zoom
-remain anchored to the pointer or gesture. A nearby mouse gives a very subtle tilt
+and the mouse wheel bring the artwork center toward the screen center, while pinch
+stays anchored to the fingers. Double-click (or double-tap) zooms in at that spot;
+double-click again to return to the whole photo, just like the gallery.
+Shift+double-click zooms out one step; Shift+arrow keys move the enlarged photo.
+Wheel, buttons and keys zoom by the same amount per step in the gallery and
+the photo room. A nearby mouse gives a very subtle tilt
 that eases back to neutral; stronger contact/directional shadows keep the print
 attached to the wall. Shared audio, settings, fullscreen, and contextual help
 remain available in the room view.

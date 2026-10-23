@@ -63,6 +63,8 @@ interface PanelState {
   focusActive: boolean;
   pointerInZone: boolean;
   pointerInPanel: boolean;
+  /** v1.42 — held open by the panel itself (expanded phone info sheet). */
+  pinned: boolean;
   // Bound, per-panel DOM listeners (kept for removeEventListener on dispose).
   onFocusIn: () => void;
   onFocusOut: () => void;
@@ -212,6 +214,30 @@ export class ChromeVisibilityManager {
   }
 
   /**
+   * v1.42 — keep a panel revealed until it is unpinned or dismissed (the
+   * expanded phone info sheet). Unpinning resumes the normal hide timing.
+   */
+  setPinned(panelId: PanelId, pinned: boolean): void {
+    if (!this.initialised) return;
+    const state = this.panels.get(panelId);
+    if (!state || state.pinned === pinned) return;
+    state.pinned = pinned;
+    if (this.currentMode() === 'visible') return;
+    if (pinned) this.reveal(panelId, 'touch');
+    else if (this.shouldHide(state)) this.scheduleHide(panelId, this.config.TOUCH_REVEAL_DURATION_MS);
+  }
+
+  /** v1.42 — the visitor swiped a panel away: hide it now (clean mode only). */
+  dismiss(panelId: PanelId): void {
+    if (!this.initialised) return;
+    const state = this.panels.get(panelId);
+    if (!state) return;
+    state.pinned = false;
+    if (this.currentMode() === 'visible') return;
+    this.hide(panelId);
+  }
+
+  /**
    * Register the navigation controls as a third managed chrome surface.
    *
    * After registration the nav container:
@@ -325,6 +351,7 @@ export class ChromeVisibilityManager {
       focusActive: false,
       pointerInZone: false,
       pointerInPanel: false,
+      pinned: false,
       onFocusIn: () => this.onPanelFocusIn(id),
       onFocusOut: () => this.onPanelFocusOut(id),
       onPointerEnter: () => this.onPanelPointerEnter(id),
@@ -371,7 +398,7 @@ export class ChromeVisibilityManager {
       clearTimeout(state.hideTimerId);
       state.hideTimerId = null;
     }
-    if (!state.revealed) return;
+    if (!state.revealed || state.pinned) return;
 
     state.el.classList.remove('is-revealed');
     state.revealed = false;
@@ -390,7 +417,7 @@ export class ChromeVisibilityManager {
   }
 
   private shouldHide(state: PanelState): boolean {
-    return !state.pointerInZone && !state.pointerInPanel && !state.focusActive;
+    return !state.pointerInZone && !state.pointerInPanel && !state.focusActive && !state.pinned;
   }
 
   // ─── Private: Event Handlers ───────────────────────────────────────────────
@@ -451,6 +478,7 @@ export class ChromeVisibilityManager {
       // Only dismiss panels the user is not actively focused inside — Escape
       // there should bubble to the panel's own handlers first.
       if (state.revealed && !state.el.contains(document.activeElement)) {
+        state.pinned = false;
         this.hide(state.id);
         dismissed = true;
       }

@@ -7,6 +7,7 @@ const html = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#c7ced4" />
   <meta name="description" content="FREYRAUM — Immersive Digital Exhibition Platform" />
   <title>freyraum — immersive gallery</title>
   <link rel="stylesheet" href="./style.css?t=${assetVersion}" />
@@ -43,6 +44,7 @@ const editorHtml = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#c7ced4" />
   <meta name="description" content="FREYRAUM Artwork Placement Editor" />
   <title>FREYRAUM — Artwork Placement Editor</title>
   <link rel="stylesheet" href="./style.css?t=${assetVersion}" />
