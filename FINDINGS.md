@@ -1,8 +1,17 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## 2026-11-03 — timeline obstruction and label shading
 
+- Escape suppression must be cleared before applying the always-visible
+  preference; otherwise `reveal()` refuses to restore the dismissed timeline.
+  A deterministic regression reproduced the failure before the fix.
+- Reduced-motion duration overrides placed before more-specific reveal selectors
+  do not reliably win the cascade. Override the shared chrome duration tokens
+  for app and system reduced motion so both fade directions use the same policy.
+- Navigation panel-leave and focus-leave timers must use the navigation delay,
+  not fall back to the info-panel delay. Modal guards must run before arrow-key
+  reveal so dialogs never activate background navigation.
 - Navigation previously revealed anywhere in the bottom 220 px, even far from
   its buttons, and short windows forced it visible. Use cached button bounds
   with a 48 px hover margin, refreshed on resize/ResizeObserver, with opacity-only

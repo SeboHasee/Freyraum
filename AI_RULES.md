@@ -1,9 +1,9 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## v1.33–v1.40 editor, saving and desktop rules
 
-Current summary: `.github/copilot-instructions.md` § Current context (v1.40).
+Current summary: `.github/copilot-instructions.md` → Current context.
 
 - One placement truth: every placement check (editor drag, loader, warnings,
   export) goes through `evaluateDisplayedPlacement`; never add a second

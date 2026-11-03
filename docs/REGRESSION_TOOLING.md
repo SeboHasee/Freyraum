@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -11,9 +11,12 @@ is accepted unless the measurement hook for its type exists and passes.
 ## Timeline reveal and label polish (added 2026-11-03)
 
 - `npm run test:chrome-visibility` (included in `npm test`) exercises timeline
-  reveal/hide state and lifecycle with deterministic DOM and timer fixtures.
+  and previous/next reveal/hide state, measured proximity, focus persistence,
+  Escape → always-visible preference changes, dialog shortcut priority, input
+  switching and teardown with deterministic DOM and timer fixtures.
 - `npm run test:gallery-room-view:browser` checks the generated preview's shared
-  timeline and room transitions; `npm run test:mobile-browser` protects phone
+  timeline and room transitions, previous/next proximity fades and the app's
+  reduced-motion override; `npm run test:mobile-browser` protects phone
   portrait/landscape controls and immersive gestures. Run browser suites alone
   and sequentially, after `npm run build`.
 - Manually compare hidden/revealed/focused thumbnails against bright and dark
@@ -402,6 +405,8 @@ Linux run them under `xvfb-run -a`.
 |---|---|---|---|
 | `npm run lint`, `npm run build:typecheck`, `npm run build` | – | lint (src, worker, desktop, local store), strict types, all bundles | quality (build also deploy) |
 | `npm run docs:check-config-authority` | – | config tables only in `docs/QUERY_PARAMETERS.md` | quality |
+| `npm run test:front-wall-aspect` | – | source/generated front-wall artwork dimensions and native aspect agree | quality via `npm test` |
+| `npm run test:chrome-visibility` | – | timeline/navigation proximity, preferences, focus, dialog priority and lifecycle | quality via `npm test` |
 | `npm run validate:museum-hub` | – | hub geometry, rooms, placement truth, calibration-scale, round trips | quality |
 | `npm run validate:deploy` | – | generated content is complete before a Pages deploy | deploy |
 | `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
@@ -423,7 +428,7 @@ Linux run them under `xvfb-run -a`.
 | `npm run validate:visual` / `validate:museum-hub:visual` | yes | Type A screenshots against a local baseline | – |
 
 `npm test` runs every no-browser check (`test:front-wall-aspect`,
-`test:gallery-room-view`, `test:touch-gestures`, `test:deep-links`,
+`test:gallery-room-view`, `test:chrome-visibility`, `test:touch-gestures`, `test:deep-links`,
 `test:save-service`, `test:validate-deploy`); quality CI calls it after the
 build. Add new pure checks to that script so CI runs them.
 

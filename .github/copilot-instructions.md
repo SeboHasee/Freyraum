@@ -1,8 +1,15 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## Current context (v1.46)
 
+- Timeline/navigation refinement (2026-11-03): `ChromeVisibilityManager` owns
+  mouse-proximity fades with cached resting bounds; no pointer-move layout reads
+  or artwork refits. Keep focus/always-visible overrides (including after Escape),
+  dialog key priority and app/system reduced-motion tokens. The single timeline
+  and its **Werke** reveal control follow photo-room reparenting; touch keeps the
+  phone immersive lifecycle. Pure checks: `npm run test:chrome-visibility`;
+  current validation and merge gates: `docs/HANDOFF.md`.
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
   Current defaults and exact source filenames: `README.md` → "Place artworks".

@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This guide documents the **current** image workflow, the verified GitHub limits
 that affect it, and the planned direction for reliable high-resolution support.

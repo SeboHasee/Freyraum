@@ -1,5 +1,16 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
+
+## 2026-11-03 — Chrome visibility lessons
+
+### Lesson 143 — Explicit preferences must override transient dismissal
+
+An Escape-dismissed timeline retained its suppression flag when the visitor
+enabled always-visible controls, so the preference could not restore it.
+Test state transitions together, not just independently: dismiss → pin visible,
+focus → departure, and dialog keys → background chrome. For reduced motion,
+override shared duration tokens rather than relying on lower-specificity CSS
+rules to beat revealed-state selectors.
 
 ## 2026-10-22 — Download size lessons
 

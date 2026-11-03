@@ -1,5 +1,5 @@
 # Documentation Rules
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## Goal
 
@@ -35,6 +35,8 @@ Keep documentation authoritative, minimal, and resistant to drift.
    matching generated bundle/config/environment before assigning root cause.
 7. Keep archived Markdown immutable except for its index; a full audit reviews
    archive discoverability rather than rewriting historical claims.
+8. Date merge-readiness evidence and verify the current pull request and checks.
+   A merged historical PR or a local test pass is not current required-CI evidence.
 
 ## Documentation freshness policy
 

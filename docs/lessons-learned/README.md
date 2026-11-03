@@ -1,5 +1,10 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
+
+## 2026-11-03 chrome visibility lesson
+
+See `../../LESSONS_LEARNED.md` Lesson 143 for preference-over-dismissal priority,
+combined visibility-state regressions and reduced-motion CSS token overrides.
 
 ## 2026-10-18 presentation-authority lessons
 

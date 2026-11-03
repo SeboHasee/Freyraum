@@ -1,8 +1,35 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
+
+## Timeline/navigation merge review (2026-11-03)
+
+- Scope: title-only thumbnails, continuous scrim, mouse-proximity timeline and
+  previous/next fades; final fixes cover Escape → always-visible preference,
+  consistent navigation timers, dialog key priority and reduced motion.
+  Camera framing, touch gestures and dependencies are unchanged.
+- Documentation: all 40 tracked Markdown files reviewed; all 28 active files
+  and the archive index refreshed. The 11 dated archive snapshots are retained
+  unchanged per `DOCUMENTATION_RULES.md`. Test-command inventory and outdated
+  PR #27 merge gates corrected; PR #27 was merged on 2026-10-23.
+- Passed locally: lint, typecheck, full production/local-preview build, `npm test`,
+  frame budget, museum-hub geometry, deploy validation, local-project store,
+  WebGL resilience and documentation config-authority checks. Visitor entry:
+  1,087,044 bytes against the 1,150,000-byte budget.
+- Browser verification and final security checks are recorded below when complete.
+- Dependency audit: production 0 vulnerabilities; full root audit reports 22
+  existing development-tool findings (15 moderate, 7 high). No packages changed.
+  See `DEPENDENCY_MAINTENANCE_PLAN.md`; these warnings are not new regressions.
+  Existing large-chunk, intentional classic-script manifest and Fraktal-size
+  build/import warnings remain.
+- GitHub snapshot: no open pull request for `copilot/improve-timeline-display`
+  and no quality workflow run for this branch. Local passes do not establish
+  GitHub required-check success. Review the current PR/check state before merging;
+  CI may require owner approval. Do not reuse the old PR #27 approval gate.
+- Real GPU/device feel, matching-customer-artifact review and live post-merge
+  Pages smoke remain explicit acceptance gates, not claims from local fixtures.
 
 ## What to hand off
 
@@ -91,10 +118,10 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Merge state (v1.41–v1.46, 2026-10-22)
+## Delivered baseline (v1.41–v1.46, merged 2026-10-23)
 
-- Branch/PR #27 (`copilot/mobile-view-optimizations`) is ready to merge;
-  `main` holds v1.33–v1.40. v1.41–v1.42 rebuilt the phone experience,
+- PR #27 (`copilot/mobile-view-optimizations`) was merged on 2026-10-23.
+  v1.41–v1.42 rebuilt the phone experience,
   v1.43–v1.44 the desktop room zoom, v1.45 worked through the previous
   handoff, v1.46 cut downloads and finished the phone feel (`CHANGELOG.md`).
 - v1.46 in short: deployed manifest without image bytes and WebP size
@@ -155,7 +182,8 @@ All run on the branch head; browser suites one at a time:
 
 ### Owner and customer gates (cannot be done by an agent)
 
-1. Click **Approve and run** for the CI checks on PR #27, then merge.
+1. Review the current timeline/navigation pull request and required CI checks;
+   click **Approve and run** if requested, then merge after checks pass.
 2. Live `/Freyraum/` smoke after the post-merge Pages deploy
    (`docs/DEPLOYMENT.md`); only that proves deployed content. Try a shared
    link (`?artwork=<id>&view=gallery`) on the live site too.
@@ -189,7 +217,8 @@ All run on the branch head; browser suites one at a time:
 
 - Hub panorama: pinch-to-zoom with the shared model; slide the next room's
   photo in during an edge pull (C5).
-- Gallery: long-press for artwork details; timeline auto-hide.
+- Gallery: long-press for artwork details; touch-specific timeline auto-hide
+  beyond the existing deliberate tap-to-hide phone mode.
 - Photo room: background parallax driven by the tilt.
 - PWA: manifest + offline cache of the published artworks.
 - Accessibility: larger-text layout checks; "reduce chrome" toggle.

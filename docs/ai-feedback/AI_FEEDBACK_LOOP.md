@@ -1,5 +1,5 @@
 # AI feedback loop
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## v1.18 placement-editor feedback-loop note
 

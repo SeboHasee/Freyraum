@@ -486,6 +486,7 @@ export class ChromeVisibilityManager {
     this.appliedMode = mode;
     document.documentElement.dataset['chromeMode'] = mode;
     if (mode === 'visible') {
+      this.timelineSuppressed = false;
       // Reveal all panels immediately and cancel any pending hide timers.
       for (const id of this.panels.keys()) this.reveal(id, 'preference');
     } else {
@@ -552,7 +553,8 @@ export class ChromeVisibilityManager {
       if (!this.initialised || this.currentMode() !== 'clean' || !this.shouldHide(state)) return;
       if (panelId === 'timeline' && (!this.timelineAvailable || state.el.dataset['autoHide'] !== 'true')) return;
       this.hide(panelId);
-    }, delayMs ?? (panelId === 'timeline' ? this.config.TIMELINE_HIDE_DELAY_MS : this.config.HIDE_DELAY_MS));
+    }, delayMs ?? (panelId === 'timeline' ? this.config.TIMELINE_HIDE_DELAY_MS
+      : panelId === 'nav-controls' ? this.config.NAV_HIDE_DELAY_MS : this.config.HIDE_DELAY_MS));
   }
 
   private shouldHide(state: PanelState): boolean {
@@ -628,6 +630,9 @@ export class ChromeVisibilityManager {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (this.currentMode() === 'visible') return;
+    if (e.defaultPrevented || document.querySelector(
+      '.gallery-room-view:not([hidden]), [role="dialog"]:not([hidden]), .prefs__panel:not([hidden]), .keyboard-help:not([hidden])'
+    )) return;
 
     // ArrowLeft/ArrowRight: briefly reveal nav controls so the user can see
     // the button they are activating (P-02 keyboard reveal channel).
@@ -638,9 +643,6 @@ export class ChromeVisibilityManager {
     }
 
     if (e.key !== 'Escape') return;
-    if (e.defaultPrevented || document.querySelector(
-      '.gallery-room-view:not([hidden]), [role="dialog"]:not([hidden]), .prefs__panel:not([hidden]), .keyboard-help:not([hidden])'
-    )) return;
 
     const timeline = this.panels.get('timeline');
     if (timeline?.revealed && this.timelineMedia.matches) {

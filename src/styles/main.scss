@@ -5141,7 +5141,17 @@ button {
 
 // ── Reduced motion: instant transitions, no breathing animation ─────────────
 // WCAG 2.3.3 — the hide/reveal slide and peek pulse are non-essential.
+:root[data-motion='reduced'] {
+  --dur-chrome-reveal: 0.001ms;
+  --dur-chrome-hide: 0.001ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) {
+    --dur-chrome-reveal: 0.001ms;
+    --dur-chrome-hide: 0.001ms;
+  }
+
   :root[data-chrome-mode='clean'] {
     .info-panel,
     .nav-controls {

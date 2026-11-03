@@ -939,6 +939,44 @@ try {
   assert.equal(timelineRest.clipping, 'hidden', 'rounded thumbnail clips the full gradient');
   assert.equal(timelineRest.inactiveOpacity, '1', 'inactive artwork remains fully opaque');
   assert.match(timelineRest.counter, /\d+ \/ \d+/, 'collection counter is retained');
+  await waitFor("!document.querySelector('.nav-controls').classList.contains('is-revealed')");
+  const settleNav = () => evaluate(`Promise.all(
+    document.querySelector('.nav-controls').getAnimations().map((animation) => animation.finished.catch(() => {}))
+  )`);
+  await settleNav();
+  const navRest = await evaluate(`(() => {
+    const nav = document.querySelector('.nav-controls');
+    const rect = nav.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, top: rect.top, bottom: rect.bottom,
+      opacity: getComputedStyle(nav).opacity, pointerEvents: getComputedStyle(nav).pointerEvents };
+  })()`);
+  assert.equal(navRest.opacity, '0', 'idle previous/next buttons fade out');
+  assert.equal(navRest.pointerEvents, 'none', 'hidden navigation does not intercept artwork input');
+  await moveTimelinePointer(navRest.x, navRest.top - 24);
+  await waitFor("document.querySelector('.nav-controls').classList.contains('is-revealed')");
+  await settleNav();
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.nav-controls')).opacity"),
+    '1', 'approaching previous/next buttons reveals them');
+  const navReducedDurations = await evaluate(`(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.motion;
+    root.dataset.motion = 'reduced';
+    const nav = document.querySelector('.nav-controls');
+    const revealed = parseFloat(getComputedStyle(nav).transitionDuration);
+    nav.classList.remove('is-revealed');
+    const hidden = parseFloat(getComputedStyle(nav).transitionDuration);
+    nav.classList.add('is-revealed');
+    root.dataset.motion = previous;
+    return { revealed, hidden };
+  })()`);
+  assert.ok(navReducedDurations.revealed < 0.001 && navReducedDurations.hidden < 0.001,
+    'application reduced motion removes both navigation fade directions');
+  await moveTimelinePointer(1400, 899);
+  await waitFor("!document.querySelector('.nav-controls').classList.contains('is-revealed')");
+  await settleNav();
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.nav-controls')).opacity"),
+    '0', 'bottom-edge hover away from the buttons does not hold navigation open');
+  console.log('✓ previous/next proximity fade and application reduced-motion override');
   const reducedTimelineDuration = await evaluate(`(() => {
     const root = document.documentElement;
     const previous = root.dataset.motion;
