@@ -24,8 +24,8 @@ export const CHROME_CONFIG = {
   /** px from the left edge of the viewport that triggers info-panel reveal */
   INFO_PANEL_TRIGGER_BAND_PX: 120,
 
-  /** Bottom band (px) that triggers nav-controls reveal. */
-  NAV_TRIGGER_BAND_PX: 220,
+  /** Hover margin around the previous/next buttons. */
+  NAV_PROXIMITY_MARGIN_PX: 48,
 
   /** ms after the pointer leaves ALL trigger zones before a panel hides */
   HIDE_DELAY_MS: 2500,
@@ -109,6 +109,8 @@ export class ChromeVisibilityManager {
   private readonly timelineMedia = window.matchMedia('(hover: hover) and (pointer: fine)');
   private timelineCue: HTMLButtonElement | null = null;
   private timelineObserver: ResizeObserver | null = null;
+  private navObserver: ResizeObserver | null = null;
+  private navBounds: DOMRect | null = null;
   private timelineAvailable = false;
   private timelineTop = Infinity;
   private timelineLeft = 0;
@@ -163,6 +165,7 @@ export class ChromeVisibilityManager {
     document.addEventListener('mouseleave', this.boundOnViewportLeave, { passive: true });
     window.addEventListener('blur', this.boundOnViewportLeave, { passive: true });
     window.addEventListener('resize', this.refreshTimeline);
+    window.addEventListener('resize', this.measureNav);
     window.addEventListener('pointerup', this.onPointerEnd, { passive: true });
     window.addEventListener('pointercancel', this.onPointerEnd, { passive: true });
     this.timelineMedia.addEventListener('change', this.refreshTimeline);
@@ -189,10 +192,12 @@ export class ChromeVisibilityManager {
     document.removeEventListener('mouseleave', this.boundOnViewportLeave);
     window.removeEventListener('blur', this.boundOnViewportLeave);
     window.removeEventListener('resize', this.refreshTimeline);
+    window.removeEventListener('resize', this.measureNav);
     window.removeEventListener('pointerup', this.onPointerEnd);
     window.removeEventListener('pointercancel', this.onPointerEnd);
     this.timelineMedia.removeEventListener('change', this.refreshTimeline);
     this.timelineObserver?.disconnect();
+    this.navObserver?.disconnect();
     this.panels.get('timeline')?.el.removeEventListener('scroll', this.onTimelineScroll, true);
     this.timelineCue?.remove();
     this.timelineCue = null;
@@ -353,7 +358,7 @@ export class ChromeVisibilityManager {
    * After registration the nav container:
    * - starts hidden in clean mode (CSS `[data-chrome-mode='clean'] .nav-controls`
    *   hides it; `.is-revealed` shows it);
-   * - reveals on bottom proximity (NAV_TRIGGER_BAND_PX), keyboard focus, and
+   * - reveals near the buttons, on keyboard focus, and on
    *   ArrowLeft/ArrowRight key presses;
    * - participates in the onboarding hint lifecycle via the `navControls`
    *   callbacks: the hint reveals the nav, and on completion the nav is
@@ -379,6 +384,9 @@ export class ChromeVisibilityManager {
     navEl.addEventListener('focusout', state.onFocusOut);
     navEl.addEventListener('pointerenter', state.onPointerEnter);
     navEl.addEventListener('pointerleave', state.onPointerLeave);
+    this.navObserver = new ResizeObserver(this.measureNav);
+    this.navObserver.observe(navEl);
+    this.measureNav();
 
     // Apply current mode: in visible mode reveal immediately; in clean mode the
     // CSS already hides the element so no JS action is needed here.
@@ -414,6 +422,10 @@ export class ChromeVisibilityManager {
       mode: this.currentMode(),
     });
   }
+
+  private measureNav = (): void => {
+    this.navBounds = this.panels.get('nav-controls')?.el.getBoundingClientRect() ?? null;
+  };
 
   /**
    * v0.63 (P-03) — Briefly elevate affordance salience after the nav onboarding
@@ -568,14 +580,15 @@ export class ChromeVisibilityManager {
     }
 
     const x = e.clientX;
-    const y = e.clientY;
-    const h = window.innerHeight;
 
     this.updateZone('info-panel', x <= this.config.INFO_PANEL_TRIGGER_BAND_PX);
-    // Nav controls share the bottom proximity zone with an extended band that
-    // covers the button height above the timeline strip.
-    if (this.panels.has('nav-controls')) {
-      this.updateZone('nav-controls', y >= h - this.config.NAV_TRIGGER_BAND_PX, this.config.NAV_HIDE_DELAY_MS);
+    const bounds = this.navBounds;
+    if (bounds) {
+      const margin = this.config.NAV_PROXIMITY_MARGIN_PX;
+      const nearby = bounds.width > 0 && bounds.height > 0
+        && x >= bounds.left - margin && x <= bounds.right + margin
+        && e.clientY >= bounds.top - margin && e.clientY <= bounds.bottom + margin;
+      this.updateZone('nav-controls', nearby, this.config.NAV_HIDE_DELAY_MS);
     }
   }
 

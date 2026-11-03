@@ -162,6 +162,9 @@ customer visual acceptance.
   Focus keeps it open, and **Bedienleiste immer einblenden** disables auto-hide.
   Touch layouts retain their existing timeline and tap-to-hide phone controls.
   Thumbnails show artwork titles only, over continuous bottom shading.
+- Previous/next buttons fade out when unused and reveal when the pointer is
+  within 48 px of their position. Keyboard focus keeps them visible; the
+  always-visible setting also applies to these buttons.
 - Artwork `Surface` metadata is optional free text and never changes material or
   render settings.
 - Artwork `Presentation` metadata is optional, validated, and affects only the

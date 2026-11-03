@@ -3,6 +3,9 @@
 
 ## Unreleased — timeline refinement (2026-11-03)
 
+- Previous/next buttons reveal near their actual bounds instead of anywhere in
+  the bottom band, then gently fade after departure. Short desktop windows no
+  longer force them visible; keyboard focus and always-visible controls remain.
 - The mouse timeline reveals near its bottom-edge area and fades away after
   departure, with an accessible **Werke** control and focus persistence.
   The existing always-visible setting and touch-phone gestures are preserved.

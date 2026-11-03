@@ -4945,12 +4945,12 @@ button {
   }
 
   // ── Nav controls (bottom-center) — v0.62 auto-hide ──────────────────────
-  // Nav arrows hide in clean mode and reveal on bottom proximity, keyboard
+  // Nav arrows hide in clean mode and reveal near the buttons, on keyboard
   // focus, ArrowLeft/ArrowRight, or when the onboarding hint fires.
   .nav-controls {
     opacity: 0;
     pointer-events: none;
-    transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset));
+    transform: translateX(-50%);
     transition:
       opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
       transform var(--dur-chrome-hide) var(--ease-chrome-hide);
@@ -4959,7 +4959,7 @@ button {
   .nav-controls.is-revealed {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%);
     transition:
       opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
       transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
@@ -5436,8 +5436,8 @@ button {
   .info-panel {
     display: none;
   }
-  // Keep nav visible alongside the fixed timeline in constrained landscape.
-  :root[data-chrome-mode='clean'] .nav-controls {
+  // Touch layouts must not depend on mouse proximity.
+  :root[data-hover='false'][data-chrome-mode='clean'] .nav-controls {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(-50%) translateY(0);

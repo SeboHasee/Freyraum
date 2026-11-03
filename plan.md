@@ -10,6 +10,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 - [ ] Customer review of mouse reveal/fade feel, title-only thumbnails and
       continuous shading against the supplied screenshot.
+- [ ] Customer review of previous/next proximity reveal and departure fade,
+      including short desktop windows.
 - [ ] Real-device confirmation of keyboard access, always-visible controls,
       touch-phone portrait/landscape and shared photo-room navigation.
 - [ ] Post-deployment verification; generated-preview checks are not live-site

@@ -3,6 +3,11 @@
 
 ## 2026-11-03 — timeline obstruction and label shading
 
+- Navigation previously revealed anywhere in the bottom 220 px, even far from
+  its buttons, and short windows forced it visible. Use cached button bounds
+  with a 48 px hover margin, refreshed on resize/ResizeObserver, with opacity-only
+  fading so proximity stays stable without pointer-move layout reads. Keep the
+  short-window visibility fallback restricted to non-hover input.
 - The customer screenshot shows a separate generic artwork subtitle and a dark
   label background ending above the thumbnail bottom. The existing source
   independently confirms a subtitle element and a title gradient with a 7 px
