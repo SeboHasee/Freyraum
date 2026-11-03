@@ -396,10 +396,13 @@ deployed gallery is approved.
 
 ## Automated test commands
 
-Browser tests need `npm run import:artworks && npm run build` and Playwright
-(`npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH` pointing at a local
-Chrome). Desktop tests also need `cd desktop && npm ci && npm run build`; on
-Linux run them under `xvfb-run -a`.
+Browser tests need `npm run build` (which imports artwork through `prebuild`).
+The room-view and mobile suites use Node 22's WebSocket client and a local
+Chrome selected with `FREYRAUM_CHROME_PATH`; no Playwright package is needed.
+Editor/deploy smoke suites require optional Playwright (`npm i --no-save
+playwright`), even when `FREYRAUM_CHROME_PATH` selects an existing Chrome.
+Desktop tests also need `cd desktop && npm ci && npm run build`; on Linux run
+them under `xvfb-run -a`.
 
 | Command | Browser | What it proves | CI |
 |---|---|---|---|
@@ -411,14 +414,14 @@ Linux run them under `xvfb-run -a`.
 | `npm run validate:deploy` | – | generated content is complete before a Pages deploy | deploy |
 | `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
-| `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
-| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
+| `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | quality via `npm test` |
+| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | quality via `npm test` |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, touch flick momentum to the pan limit, zoom readout (room + gallery), keyboard, close/focus | – |
-| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | – |
-| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | quality via `npm test` |
+| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | quality via `npm test` |
 | `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
 | `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, tap-to-hide immersive view, info sheet stops, photo-room swipe, landscape gallery rail | – |
-| `npm run test:validate-deploy` | – | deploy content check | – |
+| `npm run test:validate-deploy` | – | deploy content check | quality via `npm test` |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
 | `npm run test:editor-publish` | yes | login, uploads, placement, publish package, previews still load while waiting for approval | – |

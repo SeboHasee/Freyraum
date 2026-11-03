@@ -3,6 +3,14 @@
 
 ## 2026-11-03 — Chrome visibility lessons
 
+### Lesson 144 — Wait for debounced resize work before testing the next gesture
+
+The room/browser suite reached all new chrome checks but timed out on the later
+gallery zoom announcement. Four animation frames did not prove that the 120 ms
+debounced application resize had run: its readout rebase could follow the zoom.
+Wait for the latest resize diagnostic to match the requested viewport before
+establishing the baseline. Do not repair this with a longer fixed sleep.
+
 ### Lesson 143 — Explicit preferences must override transient dismissal
 
 An Escape-dismissed timeline retained its suppression flag when the visitor

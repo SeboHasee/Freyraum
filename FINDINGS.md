@@ -3,6 +3,11 @@
 
 ## 2026-11-03 — timeline obstruction and label shading
 
+- The first full browser pass reached all new chrome checks and responsive
+  photo-room checks, then timed out on a later zoom-readout announcement with
+  empty readout text. The harness resized from phone to desktop and waited only
+  four frames, not the app's debounced resize/rebase. It now waits for the
+  latest resize diagnostic to match the target viewport before testing zoom.
 - Escape suppression must be cleared before applying the always-visible
   preference; otherwise `reveal()` refuses to restore the dismissed timeline.
   A deterministic regression reproduced the failure before the fix.

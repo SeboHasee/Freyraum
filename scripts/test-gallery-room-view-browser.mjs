@@ -2098,6 +2098,11 @@ try {
   await command('Emulation.setDeviceMetricsOverride', {
     width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
   });
+  await waitFor(`(() => {
+    const resize = (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+      .filter((entry) => entry.scope === 'layout' && entry.event === 'resize').at(-1);
+    return resize?.data?.measuredW === 1440 && resize?.data?.measuredH === 900;
+  })()`);
   await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
   await evaluate(`(() => {
     const zoomOut = document.querySelector('.zoom-controls [aria-label="Verkleinern"]');
@@ -2110,7 +2115,7 @@ try {
     'auto',
     'the gallery overview does not show a grab cursor when panning is unavailable'
   );
-  // Let the render loop establish the post-resize overview readout baseline.
+  // The debounced resize rebases the readout; only then establish its baseline.
   await waitForFrames(4);
   await evaluate(`(() => {
     const zoomIn = document.querySelector('.zoom-controls [aria-label="Vergrößern"]');
