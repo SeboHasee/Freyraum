@@ -1,9 +1,9 @@
 # Refactor prompt
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 ## Current context
 
-Read `.github/copilot-instructions.md` § Current context (v1.40) first; it is the
+Read `.github/copilot-instructions.md` → Current context first; it is the
 single current summary for agents.
 
 Use this prompt when refactoring FREYRAUM code.

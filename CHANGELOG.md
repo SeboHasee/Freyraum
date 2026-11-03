@@ -1,5 +1,28 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
+
+## Unreleased — timeline refinement (2026-11-03)
+
+- Final refinement: always-visible controls override a prior Escape dismissal;
+  previous/next hide delays agree across hover and focus departure, and dialogs
+  keep arrow-key priority. Both app and system reduced-motion settings disable
+  chrome fades through shared timing tokens.
+- Merge review: active Markdown and test inventory refreshed, generated preview
+  rebuilt, and local validation recorded in `docs/HANDOFF.md`. Archived records
+  stay unchanged; live deployment and real-device acceptance remain separate.
+- Browser diagnostics now include runtime exceptions/context state and phone-sheet
+  geometry. Post-resize zoom checks wait for the application's debounced resize
+  event; unresolved full-suite failures remain explicit merge gates.
+- Previous/next buttons reveal near their actual bounds instead of anywhere in
+  the bottom band, then gently fade after departure. Short desktop windows no
+  longer force them visible; keyboard focus and always-visible controls remain.
+- The mouse timeline reveals near its bottom-edge area and fades away after
+  departure, with an accessible **Werke** control and focus persistence.
+  The existing always-visible setting and touch-phone gestures are preserved.
+- Timeline thumbnails show only artwork titles, with continuous bottom shading
+  instead of a label background ending above the image edge. Shadows, selection
+  emphasis and the collection counter are quieter; inactive previews retain
+  their colour.
 
 ## Unreleased — v1.46 next development round (2026-10-22)
 

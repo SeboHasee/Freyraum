@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -119,6 +119,13 @@ both file entries.
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
+  - `ChromeVisibilityManager` owns timeline and previous/next mouse-proximity
+    reveal alongside descriptive chrome; focus and the always-visible preference override
+    auto-hide. The timeline and its reveal control follow photo-room reparenting.
+    Hover visibility does not change artwork framing; touch keeps the existing
+    phone immersive lifecycle.
+    Proximity uses cached resting bounds refreshed on resize, not layout reads
+    during pointer movement; opacity-only fading preserves camera framing.
   - `interaction/touchGestures.ts` (v1.41): pure, shared touch physics —
     velocity tracking, momentum, rubber band, snapping, tap slop, double tap,
     reduced-motion check and haptic tick. Used by `CanvasInteraction`,

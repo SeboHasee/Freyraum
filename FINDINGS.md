@@ -1,5 +1,51 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
+
+## 2026-11-03 — timeline obstruction and label shading
+
+- The first full browser pass reached all new chrome checks and responsive
+  photo-room checks, then timed out on a later zoom-readout announcement with
+  empty readout text. The harness resized from phone to desktop and waited only
+  four frames, not the app's debounced resize/rebase. It now waits for the
+  latest resize diagnostic to match the target viewport before testing zoom.
+  The isolated rerun still timed out on the same empty readout, so resize
+  synchronization alone is not the cause or a fix. Browser merge acceptance
+  remains blocked while runtime/lifecycle diagnostics are investigated.
+- The isolated mobile suite reached immersive-view checks but the full → half
+  sheet drag landed on peek. Slowing the drag did not resolve it, so the input
+  cadence was restored rather than retaining an unsupported fix. The assertion
+  now includes expanded/collapsed geometry and content height for diagnosis.
+  That report showed full height 263 px, already below the 270 px half-height
+  cap: both stops coincided for the short description. The three-stop browser
+  check now uses a long-description fixture, asserts distinct heights and
+  restores customer text afterward; product gesture rules remain unchanged.
+- Escape suppression must be cleared before applying the always-visible
+  preference; otherwise `reveal()` refuses to restore the dismissed timeline.
+  A deterministic regression reproduced the failure before the fix.
+- Reduced-motion duration overrides placed before more-specific reveal selectors
+  do not reliably win the cascade. Override the shared chrome duration tokens
+  for app and system reduced motion so both fade directions use the same policy.
+- Navigation panel-leave and focus-leave timers must use the navigation delay,
+  not fall back to the info-panel delay. Modal guards must run before arrow-key
+  reveal so dialogs never activate background navigation.
+- Navigation previously revealed anywhere in the bottom 220 px, even far from
+  its buttons, and short windows forced it visible. Use cached button bounds
+  with a 48 px hover margin, refreshed on resize/ResizeObserver, with opacity-only
+  fading so proximity stays stable without pointer-move layout reads. Keep the
+  short-window visibility fallback restricted to non-hover input.
+- The customer screenshot shows a separate generic artwork subtitle and a dark
+  label background ending above the thumbnail bottom. The existing source
+  independently confirms a subtitle element and a title gradient with a 7 px
+  bottom offset. The screenshot's exact generated bundle is unknown; this is
+  source-supported diagnosis, not proof of its build identity.
+- Timeline opacity must not drive artwork viewport measurements or refitting:
+  fading navigation should not make the artwork grow and shrink. Phone immersive
+  mode remains the separate, deliberate action that frees framing space.
+- The photo room reparents the authoritative timeline. Its reveal control and
+  visibility lifecycle must follow that same surface, not duplicate navigation.
+- A timeline Escape dismissal must consume the key before the window-level
+  gallery shortcut sees it; otherwise dismissing chrome also returns to the
+  museum and loses restored focus. Dialogs and the photo room retain priority.
 
 ## 2026-10-22 — v1.46 download size and phone feel
 

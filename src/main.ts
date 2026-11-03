@@ -1023,6 +1023,7 @@ async function main(): Promise<void> {
   rendererManager.renderer.domElement.classList.add('gallery-canvas', 'gallery-canvas--loading');
   let museumHub: MainMuseumHub | null = null;
   let galleryRoomView: GalleryRoomView | null = null;
+  let chromeVisibility: ChromeVisibilityManager | null = null;
   const restoreStatus = document.createElement('div');
   restoreStatus.className = 'webgl-restore-status';
   restoreStatus.setAttribute('role', 'status');
@@ -1387,7 +1388,7 @@ async function main(): Promise<void> {
     if (immersive) {
       document.documentElement.dataset['phoneImmersive'] = 'true';
       phoneUtilityMenu.setOpen(false);
-      chromeVisibility.dismiss('info-panel');
+      chromeVisibility?.dismiss('info-panel');
     } else {
       delete document.documentElement.dataset['phoneImmersive'];
     }
@@ -1418,6 +1419,7 @@ async function main(): Promise<void> {
       roomUtilitiesVisible = visible;
       if (visible) setPhoneImmersive(false);
       placeUtilityControls();
+      chromeVisibility?.setTimelineAvailable(app.dataset['experience'] === 'gallery');
     }
   );
   galleryRoomView.setTimelineElement(timeline.element);
@@ -1465,7 +1467,7 @@ async function main(): Promise<void> {
   // already mirrored to <html> by PreferencesStore (set during construction),
   // so the panels start hidden behind the loading overlay with no visible flash.
   // v0.61 removes forced info-panel reveal on artwork changes.
-  const chromeVisibility = new ChromeVisibilityManager(
+  chromeVisibility = new ChromeVisibilityManager(
     chromeRefs.infoPanel!,
     preferences,
     app,
@@ -1477,9 +1479,11 @@ async function main(): Promise<void> {
     }
   );
   chromeVisibility.init();
+  const timelineCue = chromeVisibility.registerTimeline(timeline.element);
+  galleryRoomView.setTimelineElement(timeline.element, timelineCue);
   infoPanel.onSheetChange = (state) => {
-    if (state === 'dismissed') chromeVisibility.dismiss('info-panel');
-    else chromeVisibility.setPinned('info-panel', state === 'expanded');
+    if (state === 'dismissed') chromeVisibility?.dismiss('info-panel');
+    else chromeVisibility?.setPinned('info-panel', state === 'expanded');
   };
   // v0.62 — register nav controls as a third managed chrome surface.
   // Nav is now auto-hidden in clean mode and participates in the same
@@ -1576,7 +1580,7 @@ async function main(): Promise<void> {
   );
   // The topbar info button is a secondary discovery path for the auto-hidden
   // information panel, so users are not dependent on edge affordances.
-  topbar.onInfoClick = () => chromeVisibility.forceReveal('info-panel');
+  topbar.onInfoClick = () => chromeVisibility?.forceReveal('info-panel');
   // v0.20.6 — autoplay-recovery helper: if browser blocks initial autoplay,
   // retry once on first trusted user interaction while keeping user mute
   // preference authoritative.
@@ -2371,6 +2375,7 @@ async function main(): Promise<void> {
   const destinationRouter = new DestinationRouter({
     onStateChange: (state) => {
       app.dataset['experience'] = state === 'destination' ? 'gallery' : state;
+      chromeVisibility?.setTimelineAvailable(state === 'destination');
       galleryRoomView?.setEnabled(state === 'destination');
       applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
       verifyMuseumWallColorConsistency(
@@ -2700,7 +2705,7 @@ async function main(): Promise<void> {
     preferences.dispose();
     canvasInteraction.dispose();
     deviceTilt.dispose();
-    chromeVisibility.dispose();
+    chromeVisibility?.dispose();
     keyboardNav.dispose();
     keyboardHelp.dispose();
     topbar.dispose();

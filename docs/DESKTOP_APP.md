@@ -1,5 +1,5 @@
 # FREYRAUM Editor — desktop app (v1.40)
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 The desktop app is the placement editor as a normal Windows/macOS program. It
 opens the customer's FREYRAUM project folder (the Git checkout), saves new

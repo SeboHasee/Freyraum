@@ -214,6 +214,10 @@ try {
       // utilities sit in the phone menu, and the artwork keeps most of the height.
       await evaluate("document.querySelector('.museum-hub:not([hidden]) .museum-hub__artwork:not([disabled])').click()");
       await waitFor("!!document.querySelector('.timeline') && document.querySelector('.museum-hub')?.hidden !== false", 90_000);
+      assert.equal(await evaluate("document.querySelector('.timeline').dataset.autoHide"), 'false',
+        `${viewport.name}: touch timeline does not gain desktop auto-hide`);
+      assert.equal(await evaluate("document.querySelector('.timeline-cue').hidden"), true,
+        `${viewport.name}: desktop Werke cue stays absent on touch`);
       await delay(2_500);
       await capture(`${viewport.name}-gallery.png`);
       const rail = await evaluate(`(() => {
@@ -327,6 +331,10 @@ try {
     await delay(400);
     if (await evaluate("!!document.querySelector('.museum-hub:not([hidden])')")) await tap(centered.x, centered.y);
     await waitFor("!!document.querySelector('.timeline') && document.querySelector('.museum-hub')?.hidden !== false", 90_000);
+    assert.equal(await evaluate("document.querySelector('.timeline').dataset.autoHide"), 'false',
+      `${viewport.name}: portrait touch timeline remains persistent`);
+    assert.equal(await evaluate("document.querySelector('.timeline-cue').hidden"), true,
+      `${viewport.name}: portrait touch has no desktop cue`);
     await delay(2_500);
     await capture(`${viewport.name}-gallery.png`);
     const chrome = await evaluate(`(() => {
@@ -495,6 +503,14 @@ try {
     })()`);
     await tap(infoButton.x, infoButton.y);
     await waitFor("document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    // Short descriptions make half and full the same height. Exercise three
+    // distinct stops with long content, then restore the customer's text.
+    const sheetDescription = await evaluate(`(() => {
+      const description = document.querySelector('.info-panel__description');
+      const original = description.textContent;
+      description.textContent = Array(12).fill(original).join(' ');
+      return original;
+    })()`);
     await settleAnimations('.info-panel');
     const handleAt = () => evaluate(`(() => {
       const rect = document.querySelector('.info-panel__handle').getBoundingClientRect();
@@ -514,7 +530,11 @@ try {
       const panel = document.querySelector('.info-panel');
       const handleRect = document.querySelector('.info-panel__handle').getBoundingClientRect();
       const hit = document.elementFromPoint(handleRect.left + handleRect.width / 2, handleRect.top + handleRect.height / 2);
-      return { stop: panel.dataset.sheetStop, className: panel.className, handleTop: handleRect.top, hit: hit?.className ?? null };
+      return {
+        stop: panel.dataset.sheetStop, className: panel.className,
+        height: panel.getBoundingClientRect().height, contentHeight: panel.scrollHeight,
+        handleTop: handleRect.top, hit: hit?.className ?? null,
+      };
     })()`);
     const beforeDrag = await sheetState();
     await dragY(handle.x, handle.y, handle.y - 90);
@@ -544,6 +564,10 @@ try {
     );
     assert.equal(expandedSheet.ariaExpanded, 'true', `${viewport.name}: the handle reports the expanded state`);
     assert.ok(
+      expandedSheet.bottom - expandedSheet.top > viewport.height * 0.32 + 40,
+      `${viewport.name}: the long-content fixture separates full and half stops`
+    );
+    assert.ok(
       expandedSheet.top >= expandedSheet.topbarBottom && expandedSheet.bottom <= expandedSheet.timelineTop,
       `${viewport.name}: the expanded sheet sits between topbar and timeline (${JSON.stringify(expandedSheet)})`
     );
@@ -562,7 +586,9 @@ try {
     assert.equal(
       await evaluate("document.querySelector('.info-panel').dataset.sheetStop"),
       'half',
-      `${viewport.name}: the collapsed sheet rests on the half stop`
+      `${viewport.name}: the collapsed sheet rests on the half stop (${JSON.stringify({
+        expanded: expandedSheet, collapsed: await sheetState(), halfHeight,
+      })})`
     );
     // v1.46 (C1): half → peek (title only) → dismissed.
     handle = await handleAt();
@@ -588,6 +614,7 @@ try {
     handle = await handleAt();
     await dragY(handle.x, handle.y, handle.y + 90);
     await waitFor("!document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    await evaluate(`document.querySelector('.info-panel__description').textContent = ${JSON.stringify(sheetDescription)}`);
     console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, then steps half → peek → away`);
 
     // v1.46 (C2): at the fitted zoom a horizontal swipe changes the photo room.

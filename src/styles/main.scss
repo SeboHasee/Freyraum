@@ -2941,6 +2941,7 @@ body.placement-editor {
   .nav-controls,
   .zoom-controls,
   .timeline,
+  .timeline-cue,
   .hint-text,
   .info-panel-peek-hit,
   .info-panel-peek,
@@ -4050,7 +4051,7 @@ button {
   border-radius: 22px;
   padding: 13px 14px 10px;
   z-index: 100;
-  box-shadow: 0 16px 48px rgba(17, 24, 29, 0.18), 0 2px 8px rgba(17, 24, 29, 0.08);
+  box-shadow: 0 8px 26px rgba(17, 24, 29, 0.1);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -4127,12 +4128,12 @@ button {
   border: 2px solid rgba(17, 24, 29, 0.12);
   background: rgba(255, 255, 255, 0.72);
   scroll-margin-inline: 12px;
-  opacity: 0.78;
+  opacity: 1;
 
   &.is-active {
-    transform: translateY(-3px) scale(1.045);
+    transform: translateY(-1px);
     border-color: rgba(17, 24, 29, 0.82);
-    box-shadow: 0 8px 22px rgba(17, 24, 29, 0.26);
+    box-shadow: 0 3px 10px rgba(17, 24, 29, 0.15);
     opacity: 1;
   }
 
@@ -4168,6 +4169,15 @@ button {
   &:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 30% 0 0;
+    z-index: 1;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.22) 65%, transparent);
+    pointer-events: none;
   }
 }
 
@@ -4214,10 +4224,10 @@ button {
   min-width: 68px;
   padding: 8px 10px;
   border-radius: 999px;
-  background: rgba(17, 24, 29, 0.88);
-  color: #fff;
+  background: rgba(17, 24, 29, 0.06);
+  color: var(--text-strong);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
   pointer-events: none;
@@ -4288,8 +4298,8 @@ button {
   left: 0;
   right: 0;
   overflow: hidden;
-  padding: 14px 9px 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.28) 75%, transparent);
+  z-index: 2;
+  padding: 0 9px;
   font-size: 11px;
   font-weight: 650;
   color: #fff;
@@ -4300,22 +4310,73 @@ button {
   pointer-events: none;
 }
 
-.timeline__thumb-subtitle {
-  position: absolute;
-  z-index: 1;
-  left: 9px;
-  right: 9px;
-  bottom: 27px;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 8px;
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  text-align: left;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
+.timeline[hidden] {
+  // Keep the resting camera envelope measurable during loading and hub entry.
+  display: flex;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.timeline-cue[hidden] {
+  display: none;
+}
+
+.timeline-cue {
+  display: none;
+  position: fixed;
+  bottom: calc(12px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  min-width: 64px;
+  min-height: 36px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :root[data-chrome-mode='clean'] {
+    .timeline[data-auto-hide='true'] {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 520ms var(--ease-chrome-hide);
+
+      &.is-revealed {
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 280ms var(--ease-chrome-reveal);
+      }
+    }
+
+    &[data-motion='reduced'] .timeline[data-auto-hide='true'] {
+      transition-duration: 0.001ms !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .timeline[data-auto-hide='true'] {
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    .timeline-cue:not([hidden]) {
+      display: block;
+
+      &.is-revealed:not(:focus-visible) {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+  }
 }
 
 // =============================================================================
@@ -4740,8 +4801,11 @@ button {
     font-weight: 700;
   }
 
-  .timeline__thumb-label {
+  .timeline__thumb::before {
     background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.2));
+  }
+
+  .timeline__thumb-label {
     font-weight: 600;
   }
 }
@@ -4824,7 +4888,7 @@ button {
 // v0.60 — CLEAN CHROME AUTO-HIDE
 // =============================================================================
 // The info panel (left) is hidden by default and reveals on pointer proximity,
-// keyboard focus, or touch tap. The timeline remains fixed and visible.
+// keyboard focus, or touch tap. Fine-mouse timeline visibility shares this owner.
 // `ChromeVisibilityManager`
 // toggles the `.is-revealed` class and sets `data-chrome-mode` on <html>
 // (mirrored early by PreferencesStore so there is no flash of visible chrome on
@@ -4881,12 +4945,12 @@ button {
   }
 
   // ── Nav controls (bottom-center) — v0.62 auto-hide ──────────────────────
-  // Nav arrows hide in clean mode and reveal on bottom proximity, keyboard
+  // Nav arrows hide in clean mode and reveal near the buttons, on keyboard
   // focus, ArrowLeft/ArrowRight, or when the onboarding hint fires.
   .nav-controls {
     opacity: 0;
     pointer-events: none;
-    transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset));
+    transform: translateX(-50%);
     transition:
       opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
       transform var(--dur-chrome-hide) var(--ease-chrome-hide);
@@ -4895,7 +4959,7 @@ button {
   .nav-controls.is-revealed {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
+    transform: translateX(-50%);
     transition:
       opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
       transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
@@ -5077,7 +5141,17 @@ button {
 
 // ── Reduced motion: instant transitions, no breathing animation ─────────────
 // WCAG 2.3.3 — the hide/reveal slide and peek pulse are non-essential.
+:root[data-motion='reduced'] {
+  --dur-chrome-reveal: 0.001ms;
+  --dur-chrome-hide: 0.001ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion='full']) {
+    --dur-chrome-reveal: 0.001ms;
+    --dur-chrome-hide: 0.001ms;
+  }
+
   :root[data-chrome-mode='clean'] {
     .info-panel,
     .nav-controls {
@@ -5234,13 +5308,9 @@ button {
     border-radius: 10px;
   }
 
-  .timeline__thumb-subtitle {
-    display: none;
-  }
-
   .timeline__thumb-label {
     bottom: 4px;
-    padding: 10px 6px 0;
+    padding: 0 6px;
     font-size: 10px;
   }
 
@@ -5376,8 +5446,8 @@ button {
   .info-panel {
     display: none;
   }
-  // Keep nav visible alongside the fixed timeline in constrained landscape.
-  :root[data-chrome-mode='clean'] .nav-controls {
+  // Touch layouts must not depend on mouse proximity.
+  :root[data-hover='false'][data-chrome-mode='clean'] .nav-controls {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(-50%) translateY(0);

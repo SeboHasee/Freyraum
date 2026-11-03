@@ -148,6 +148,7 @@ export class GalleryRoomView {
   private timelineOriginalParent: HTMLElement | null = null;
   private timelineOriginalNextSibling: Node | null = null;
   private timelineOriginalLabel: string | null = null;
+  private timelineCue: HTMLElement | null = null;
   private enabled = false;
   private visible = false;
   private disposed = false;
@@ -326,10 +327,11 @@ export class GalleryRoomView {
     this.utilityControls.replaceChildren(...controls);
   }
 
-  setTimelineElement(timeline: HTMLElement): void {
+  setTimelineElement(timeline: HTMLElement, cue: HTMLElement | null = null): void {
     this.timelineElement = timeline;
+    this.timelineCue = cue;
     this.timelineOriginalParent = timeline.parentElement;
-    this.timelineOriginalNextSibling = timeline.nextSibling;
+    this.timelineOriginalNextSibling = timeline.nextSibling === cue ? cue?.nextSibling ?? null : timeline.nextSibling;
     this.timelineOriginalLabel = timeline.getAttribute('aria-label');
     this.updateTimelinePlacement();
   }
@@ -455,6 +457,7 @@ export class GalleryRoomView {
       timeline.classList.add('gallery-room-view__timeline');
       timeline.setAttribute('aria-label', 'Kunstwerke im Fotoraum auswählen');
       this.timelineHost.appendChild(timeline);
+      if (this.timelineCue) this.timelineHost.appendChild(this.timelineCue);
       return;
     }
     timeline.classList.remove('gallery-room-view__timeline');
@@ -467,6 +470,7 @@ export class GalleryRoomView {
         timeline,
         nextSibling?.parentNode === parent ? nextSibling : null
       );
+      if (this.timelineCue) timeline.after(this.timelineCue);
     }
   }
 

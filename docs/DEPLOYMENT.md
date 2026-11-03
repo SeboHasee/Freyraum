@@ -1,5 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -14,6 +14,11 @@ For visual hub incidents, record the deployed commit/run and preserve the
 generated artwork/config bundle before redeploying. A deployed screenshot must
 not be assumed to represent the current workspace merely because the URL is
 unchanged.
+
+Current timeline/navigation merge checks and remaining owner gates:
+[`HANDOFF.md`](./HANDOFF.md) → "Timeline/navigation merge review".
+The old mobile PR #27 is merged; its prior approval status is not evidence
+for the current branch or deployment.
 
 ---
 

@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -157,7 +157,16 @@ customer visual acceptance.
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
-- The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
+- With a mouse, the timeline fades in near its bottom-edge area and fades out
+  after departure; **Werke** provides a keyboard-accessible reveal control.
+  Focus keeps it open, and **Bedienleiste immer einblenden** disables auto-hide.
+  Touch layouts retain their existing timeline and tap-to-hide phone controls.
+  Thumbnails show artwork titles only, over continuous bottom shading.
+- Previous/next buttons fade out when unused and reveal when the pointer is
+  within 48 px of their position. Keyboard focus keeps them visible; the
+  always-visible setting also applies to these buttons.
+  Reduced motion disables chrome fades; explicit always-visible controls take
+  precedence over an earlier Escape dismissal.
 - Artwork `Surface` metadata is optional free text and never changes material or
   render settings.
 - Artwork `Presentation` metadata is optional, validated, and affects only the

@@ -1,12 +1,30 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-22.md` (v1.41–v1.44 and 2026-10-18…20),
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
-## Next development round (v1.46, 2026-10-22) — ready to merge
+## Timeline refinement acceptance (2026-11-03)
+
+- Technical validation and current merge gates: `docs/HANDOFF.md` →
+  "Timeline/navigation merge review". PR #27 was merged on 2026-10-23; it is
+  not the merge target for this work.
+- [ ] Resolve the full browser-suite failures: empty gallery zoom announcement
+      after returning from the photo room, and full → half phone-sheet drag
+      landing on peek. Preserve assertions; diagnose using the enriched runtime
+      and geometry failure reports.
+- [ ] Customer review of mouse reveal/fade feel, title-only thumbnails and
+      continuous shading against the supplied screenshot.
+- [ ] Customer review of previous/next proximity reveal and departure fade,
+      including short desktop windows.
+- [ ] Real-device confirmation of keyboard access, always-visible controls,
+      touch-phone portrait/landscape and shared photo-room navigation.
+- [ ] Post-deployment verification; generated-preview checks are not live-site
+      acceptance.
+
+## Next development round — follow-ups to the merged v1.46 baseline
 
 Delivered on PR #27 (details: `CHANGELOG.md` v1.46, numbers: `FINDINGS.md`):
 B1 web manifest without image bytes, B2 WebP size variants, B3 lazy editor
@@ -16,7 +34,7 @@ C6 flick test, D3 zoom readout, D5 gallery zoom fixed point, E3 deep links +
 "Link teilen", `npm test` in CI. The full round and the v1.45 handoff
 checklist: `docs/archive/plan-history-2026-10-22-v1.46.md`.
 
-- [ ] A Owner gates: approve CI on PR #27 and merge; live `/Freyraum/` check
+- [ ] A Owner gates: current-branch PR/CI review; live `/Freyraum/` check
       (`docs/DEPLOYMENT.md`); real-phone and real-GPU desktop pass (see
       "Open — acceptance" below).
 - [ ] G Content from the customer (see "Open — acceptance").
@@ -59,8 +77,8 @@ Deferred to the next round, best decided after real-device feedback:
 
 Consolidated from the archived plans; one entry per gate.
 
-- [ ] Approve the agent-started Actions runs and merge PR #27 (v1.41–v1.46,
-      branch `copilot/mobile-view-optimizations`; `main` holds v1.33–v1.40).
+- [ ] Review the timeline/navigation branch in a pull request, approve any
+      agent-started CI runs requiring approval, and merge only after checks pass.
 - [ ] Post-merge Pages deploy plus live `/Freyraum/` smoke
       (`docs/DEPLOYMENT.md`); local or fixture passes are not deployment evidence.
       Includes the old "plain white background" report and side-wall

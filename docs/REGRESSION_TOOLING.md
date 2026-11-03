@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,24 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Timeline reveal and label polish (added 2026-11-03)
+
+- `npm run test:chrome-visibility` (included in `npm test`) exercises timeline
+  and previous/next reveal/hide state, measured proximity, focus persistence,
+  Escape → always-visible preference changes, dialog shortcut priority, input
+  switching and teardown with deterministic DOM and timer fixtures.
+- `npm run test:gallery-room-view:browser` checks the generated preview's shared
+  timeline and room transitions, previous/next proximity fades and the app's
+  reduced-motion override; `npm run test:mobile-browser` protects phone
+  portrait/landscape controls and immersive gestures. Run browser suites alone
+  and sequentially, after `npm run build`.
+- Manually compare hidden/revealed/focused thumbnails against bright and dark
+  images, portrait/landscape aspect ratios, long titles, enlarged text, reduced
+  motion and high contrast. The title scrim must reach the rounded bottom edge
+  without a bare strip, and mouse fades must never reframe the artwork.
+- Screenshot matching, fade feel on a real GPU, real-device touch acceptance,
+  and post-deployment checks remain separate from fixture or headless passes.
 
 ## Download size and bundle budgets (added 2026-10-22, v1.46)
 
@@ -48,6 +66,9 @@ arrived (lesson 132). Since v1.46 the 390×844 pass checks the info-sheet stops
 `overscroll-behavior: contain`) and the photo-room swipe (next room, back, and
 spring-back at the first room). About 5–10 min headless; run
 it alone. Real-device feel is still manual.
+The three-stop sheet check uses long description text and restores the original
+afterward: short content can make half and full the same physical height.
+Failure reports include sheet geometry, not only the semantic stop.
 
 ## Mobile touch, gyro and hub panorama (added 2026-10-21)
 
@@ -378,27 +399,32 @@ deployed gallery is approved.
 
 ## Automated test commands
 
-Browser tests need `npm run import:artworks && npm run build` and Playwright
-(`npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH` pointing at a local
-Chrome). Desktop tests also need `cd desktop && npm ci && npm run build`; on
-Linux run them under `xvfb-run -a`.
+Browser tests need `npm run build` (which imports artwork through `prebuild`).
+The room-view and mobile suites use Node 22's WebSocket client and a local
+Chrome selected with `FREYRAUM_CHROME_PATH`; no Playwright package is needed.
+Editor/deploy smoke suites require optional Playwright (`npm i --no-save
+playwright`), even when `FREYRAUM_CHROME_PATH` selects an existing Chrome.
+Desktop tests also need `cd desktop && npm ci && npm run build`; on Linux run
+them under `xvfb-run -a`.
 
 | Command | Browser | What it proves | CI |
 |---|---|---|---|
 | `npm run lint`, `npm run build:typecheck`, `npm run build` | – | lint (src, worker, desktop, local store), strict types, all bundles | quality (build also deploy) |
 | `npm run docs:check-config-authority` | – | config tables only in `docs/QUERY_PARAMETERS.md` | quality |
+| `npm run test:front-wall-aspect` | – | source/generated front-wall artwork dimensions and native aspect agree | quality via `npm test` |
+| `npm run test:chrome-visibility` | – | timeline/navigation proximity, preferences, focus, dialog priority and lifecycle | quality via `npm test` |
 | `npm run validate:museum-hub` | – | hub geometry, rooms, placement truth, calibration-scale, round trips | quality |
 | `npm run validate:deploy` | – | generated content is complete before a Pages deploy | deploy |
 | `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
-| `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
-| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
+| `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | quality via `npm test` |
+| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | quality via `npm test` |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, touch flick momentum to the pan limit, zoom readout (room + gallery), keyboard, close/focus | – |
-| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | – |
-| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | quality via `npm test` |
+| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | quality via `npm test` |
 | `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
 | `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, tap-to-hide immersive view, info sheet stops, photo-room swipe, landscape gallery rail | – |
-| `npm run test:validate-deploy` | – | deploy content check | – |
+| `npm run test:validate-deploy` | – | deploy content check | quality via `npm test` |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
 | `npm run test:editor-publish` | yes | login, uploads, placement, publish package, previews still load while waiting for approval | – |
@@ -408,7 +434,7 @@ Linux run them under `xvfb-run -a`.
 | `npm run validate:visual` / `validate:museum-hub:visual` | yes | Type A screenshots against a local baseline | – |
 
 `npm test` runs every no-browser check (`test:front-wall-aspect`,
-`test:gallery-room-view`, `test:touch-gestures`, `test:deep-links`,
+`test:gallery-room-view`, `test:chrome-visibility`, `test:touch-gestures`, `test:deep-links`,
 `test:save-service`, `test:validate-deploy`); quality CI calls it after the
 build. Add new pure checks to that script so CI runs them.
 

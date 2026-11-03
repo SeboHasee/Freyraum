@@ -1,5 +1,34 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
+> Latest markdown audit: 2026-11-03 (timeline/navigation merge review).
+
+## 2026-11-03 — Chrome visibility lessons
+
+### Lesson 145 — Give multi-stop layout tests distinct physical stops
+
+The phone check expected full → half, but a short description made both heights
+263 px (below the half-height cap). A 90 px pull correctly snapped toward peek;
+slowing the input did not fix the fixture. Use long content for the three-stop
+regression, assert separated heights and restore the original customer text.
+Include geometry in failures before changing gesture physics.
+
+### Lesson 144 — Wait for debounced resize work before testing the next gesture
+
+The room/browser suite reached all new chrome checks but timed out on the later
+gallery zoom announcement. Four animation frames did not prove that the 120 ms
+debounced application resize had run: its readout rebase could follow the zoom.
+Wait for the latest resize diagnostic to match the requested viewport before
+establishing the baseline. Do not repair this with a longer fixed sleep.
+The rerun still failed at the same empty readout: this synchronization is
+necessary coverage, not proof of the failure's root cause or resolution.
+
+### Lesson 143 — Explicit preferences must override transient dismissal
+
+An Escape-dismissed timeline retained its suppression flag when the visitor
+enabled always-visible controls, so the preference could not restore it.
+Test state transitions together, not just independently: dismiss → pin visible,
+focus → departure, and dialog keys → background chrome. For reduced motion,
+override shared duration tokens rather than relying on lower-specificity CSS
+rules to beat revealed-state selectors.
 
 ## 2026-10-22 — Download size lessons
 

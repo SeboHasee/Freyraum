@@ -1,5 +1,5 @@
 # Documentation Archive
-> Archive index reviewed: 2026-10-22 (v1.45 handoff completion audit).
+> Archive index reviewed: 2026-11-03 (timeline/navigation merge review).
 
 This folder preserves historical rationale and long-form engineering context that is no longer suitable for operational docs.
 The 2026-06-21 snapshots were reviewed for discoverability during the v1.18
@@ -15,6 +15,10 @@ for operational navigation.
 - Avoid relying on Git history as the only knowledge source.
 
 ## Current archived snapshots
+
+The 2026-11-03 audit checked all 11 dated snapshots against this index. Their
+historical content remains unchanged; current timeline/navigation validation
+and merge gates belong in `../HANDOFF.md` and `../../plan.md`.
 
 No new snapshot was added during the 2026-10-20 documentation audit: the
 photo-room screenshot follow-up and validation notes remain active in `plan.md`
