@@ -11,6 +11,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - Technical validation and current merge gates: `docs/HANDOFF.md` →
   "Timeline/navigation merge review". PR #27 was merged on 2026-10-23; it is
   not the merge target for this work.
+- [ ] Resolve the full browser-suite failures: empty gallery zoom announcement
+      after returning from the photo room, and full → half phone-sheet drag
+      landing on peek. Preserve assertions; diagnose using the enriched runtime
+      and geometry failure reports.
 - [ ] Customer review of mouse reveal/fade feel, title-only thumbnails and
       continuous shading against the supplied screenshot.
 - [ ] Customer review of previous/next proximity reveal and departure fade,

@@ -18,7 +18,14 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   frame budget, museum-hub geometry, deploy validation, local-project store,
   WebGL resilience and documentation config-authority checks. Visitor entry:
   1,087,044 bytes against the 1,150,000-byte budget.
-- Browser verification and final security checks are recorded below when complete.
+- Browser gate: the new navigation/timeline checks and responsive photo-room
+  bounds passed, but the full room suite timed out on the later gallery zoom
+  announcement. Waiting for completed resize did not resolve it. The mobile
+  suite reached immersive-view checks, then full → half sheet drag landed on
+  peek; slowing input did not resolve it either. Assertions remain intact and
+  now include runtime/context and sheet-geometry diagnostics. Do not mark the
+  branch merge-ready until these failures are resolved.
+- Final security review is recorded below when complete.
 - Dependency audit: production 0 vulnerabilities; full root audit reports 22
   existing development-tool findings (15 moderate, 7 high). No packages changed.
   See `DEPENDENCY_MAINTENANCE_PLAN.md`; these warnings are not new regressions.

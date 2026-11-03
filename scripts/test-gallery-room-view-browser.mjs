@@ -84,8 +84,12 @@ try {
 
   let nextId = 0;
   const pending = new Map();
+  const runtimeExceptions = [];
   socket.addEventListener('message', ({ data }) => {
     const message = JSON.parse(data);
+    if (message.method === 'Runtime.exceptionThrown') {
+      runtimeExceptions.push(message.params.exceptionDetails);
+    }
     if (!message.id || !pending.has(message.id)) return;
     const { resolve, reject } = pending.get(message.id);
     pending.delete(message.id);
@@ -235,10 +239,15 @@ try {
       zoom: document.querySelector('.zoom-indicator:not(.gallery-room-view__zoom-indicator)')?.textContent,
       timelineHidden: document.querySelector('.timeline')?.hidden,
       motion: document.documentElement.dataset.motion,
+      visibility: document.visibilityState,
+      contextLost: document.querySelector('.gallery-canvas')?.getContext('webgl2')?.isContextLost(),
+      recentRuntime: (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+        .filter((entry) => entry.scope === 'lifecycle' || entry.scope === 'context-lost'
+          || entry.event === 'gallery-entered' || entry.level === 'error').slice(-8),
       recentLayout: (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
         .filter((entry) => entry.scope === 'layout' || entry.event === 'gallery-entered').slice(-4),
     }))()`);
-    throw new Error(`Timed out waiting for ${expression}; camera=${camera}; state=${JSON.stringify(state)}`);
+    throw new Error(`Timed out waiting for ${expression}; camera=${camera}; state=${JSON.stringify(state)}; runtimeExceptions=${JSON.stringify(runtimeExceptions.slice(-5))}`);
   };
 
   await command('Page.enable');

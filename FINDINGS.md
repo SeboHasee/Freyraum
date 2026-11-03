@@ -8,6 +8,13 @@
   empty readout text. The harness resized from phone to desktop and waited only
   four frames, not the app's debounced resize/rebase. It now waits for the
   latest resize diagnostic to match the target viewport before testing zoom.
+  The isolated rerun still timed out on the same empty readout, so resize
+  synchronization alone is not the cause or a fix. Browser merge acceptance
+  remains blocked while runtime/lifecycle diagnostics are investigated.
+- The isolated mobile suite reached immersive-view checks but the full → half
+  sheet drag landed on peek. Slowing the drag did not resolve it, so the input
+  cadence was restored rather than retaining an unsupported fix. The assertion
+  now includes expanded/collapsed geometry and content height for diagnosis.
 - Escape suppression must be cleared before applying the always-visible
   preference; otherwise `reveal()` refuses to restore the dismissed timeline.
   A deterministic regression reproduced the failure before the fix.

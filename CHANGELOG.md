@@ -10,6 +10,9 @@
 - Merge review: active Markdown and test inventory refreshed, generated preview
   rebuilt, and local validation recorded in `docs/HANDOFF.md`. Archived records
   stay unchanged; live deployment and real-device acceptance remain separate.
+- Browser diagnostics now include runtime exceptions/context state and phone-sheet
+  geometry. Post-resize zoom checks wait for the application's debounced resize
+  event; unresolved full-suite failures remain explicit merge gates.
 - Previous/next buttons reveal near their actual bounds instead of anywhere in
   the bottom band, then gently fade after departure. Short desktop windows no
   longer force them visible; keyboard focus and always-visible controls remain.

@@ -522,7 +522,11 @@ try {
       const panel = document.querySelector('.info-panel');
       const handleRect = document.querySelector('.info-panel__handle').getBoundingClientRect();
       const hit = document.elementFromPoint(handleRect.left + handleRect.width / 2, handleRect.top + handleRect.height / 2);
-      return { stop: panel.dataset.sheetStop, className: panel.className, handleTop: handleRect.top, hit: hit?.className ?? null };
+      return {
+        stop: panel.dataset.sheetStop, className: panel.className,
+        height: panel.getBoundingClientRect().height, contentHeight: panel.scrollHeight,
+        handleTop: handleRect.top, hit: hit?.className ?? null,
+      };
     })()`);
     const beforeDrag = await sheetState();
     await dragY(handle.x, handle.y, handle.y - 90);
@@ -570,7 +574,9 @@ try {
     assert.equal(
       await evaluate("document.querySelector('.info-panel').dataset.sheetStop"),
       'half',
-      `${viewport.name}: the collapsed sheet rests on the half stop`
+      `${viewport.name}: the collapsed sheet rests on the half stop (${JSON.stringify({
+        expanded: expandedSheet, collapsed: await sheetState(), halfHeight,
+      })})`
     );
     // v1.46 (C1): half → peek (title only) → dismissed.
     handle = await handleAt();
