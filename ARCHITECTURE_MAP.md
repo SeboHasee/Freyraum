@@ -119,6 +119,11 @@ both file entries.
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
+  - `ChromeVisibilityManager` owns timeline mouse-proximity reveal alongside
+    descriptive chrome; focus and the always-visible preference override
+    auto-hide. The timeline and its reveal control follow photo-room reparenting.
+    Hover visibility does not change artwork framing; touch keeps the existing
+    phone immersive lifecycle.
   - `interaction/touchGestures.ts` (v1.41): pure, shared touch physics —
     velocity tracking, momentum, rubber band, snapping, tap slop, double tap,
     reduced-motion check and haptic tick. Used by `CanvasInteraction`,

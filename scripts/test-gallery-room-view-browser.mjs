@@ -49,6 +49,7 @@ try {
     '--headless=new',
     '--no-sandbox',
     '--disable-dev-shm-usage',
+    '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4',
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${tempProfile}`,
     '--use-angle=swiftshader',
@@ -229,7 +230,15 @@ try {
     const camera = await evaluate(
       "document.querySelector('.gallery-room-view__scene')?.style.transform ?? null"
     );
-    throw new Error(`Timed out waiting for ${expression}; camera=${camera}`);
+    const state = await evaluate(`(() => ({
+      experience: document.querySelector('#app')?.dataset.experience,
+      zoom: document.querySelector('.zoom-indicator:not(.gallery-room-view__zoom-indicator)')?.textContent,
+      timelineHidden: document.querySelector('.timeline')?.hidden,
+      motion: document.documentElement.dataset.motion,
+      recentLayout: (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+        .filter((entry) => entry.scope === 'layout' || entry.event === 'gallery-entered').slice(-4),
+    }))()`);
+    throw new Error(`Timed out waiting for ${expression}; camera=${camera}; state=${JSON.stringify(state)}`);
   };
 
   await command('Page.enable');
@@ -831,6 +840,16 @@ try {
     returnedRightFrontState.focused,
     'returning to the hub may retain only its keyboard-focus spotlight cue'
   );
+  assert.deepEqual(await evaluate(`(() => {
+    const timeline = document.querySelector('.timeline');
+    return {
+      hidden: timeline.hidden,
+      visibility: getComputedStyle(timeline).visibility,
+      measurable: timeline.getBoundingClientRect().height > 0,
+      cueHidden: document.querySelector('.timeline-cue').hidden,
+    };
+  })()`), { hidden: true, visibility: 'hidden', measurable: true, cueHidden: true },
+  'hub hides timeline and cue without collapsing the resting camera envelope');
   await evaluate("document.querySelector('.museum-hub__destination:not([disabled])')?.click()");
   await waitFor("document.querySelector('#app').dataset.experience === 'gallery'", 30_000);
   const roomEntry = await evaluate(`(() => {
@@ -870,8 +889,123 @@ try {
   );
   assert.equal(entryModes.shortLabelVisible, true, 'room-view entry keeps a visible label on compact phones');
   assert.ok(entryModes.width > 0, 'primary room-view entry has a visible touch target');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  const settleTimeline = () => evaluate(`Promise.all(
+    document.querySelector('.timeline').getAnimations().map((animation) => animation.finished.catch(() => {}))
+  )`);
+  const moveTimelinePointer = async (x, y) => {
+    await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await waitForFrames(2);
+  };
+  await moveTimelinePointer(720, 400);
+  await waitFor("!document.querySelector('.timeline').classList.contains('is-revealed')");
+  await settleTimeline();
+  const timelineRest = await evaluate(`(() => {
+    const timeline = document.querySelector('.timeline');
+    const cue = document.querySelector('.timeline-cue');
+    const rect = timeline.getBoundingClientRect();
+    const thumb = timeline.querySelector('.timeline__thumb');
+    const label = thumb.querySelector('.timeline__thumb-label');
+    const gradient = getComputedStyle(thumb, '::before');
+    return {
+      top: rect.top, bottom: rect.bottom, x: rect.x + rect.width / 2,
+      opacity: getComputedStyle(timeline).opacity,
+      pointerEvents: getComputedStyle(timeline).pointerEvents,
+      duration: getComputedStyle(timeline).transitionDuration,
+      cueVisible: !cue.hidden && getComputedStyle(cue).display !== 'none',
+      cueLabel: cue.textContent, expanded: cue.getAttribute('aria-expanded'),
+      accessibleTitle: thumb.getAttribute('aria-label') === label.textContent,
+      subtitleCount: timeline.querySelectorAll('.timeline__thumb-subtitle').length,
+      gradientBottom: gradient.bottom, gradientBackground: gradient.backgroundImage,
+      labelBackground: getComputedStyle(label).backgroundImage,
+      clipping: getComputedStyle(thumb).overflow,
+      inactiveOpacity: getComputedStyle(timeline.querySelector('.timeline__thumb:not(.is-active)')).opacity,
+      counter: timeline.querySelector('.timeline__counter').textContent,
+    };
+  })()`);
+  assert.equal(timelineRest.opacity, '0', 'desktop timeline starts clean');
+  assert.equal(timelineRest.pointerEvents, 'none', 'hidden timeline does not intercept artwork input');
+  assert.equal(timelineRest.duration, '0.52s', 'desktop hide uses 520ms opacity transition');
+  assert.equal(timelineRest.cueVisible, true, 'static Werke cue stays discoverable');
+  assert.equal(timelineRest.cueLabel, 'Werke');
+  assert.equal(timelineRest.expanded, 'false');
+  assert.equal(timelineRest.accessibleTitle, true, 'thumbnail accessible name is the title alone');
+  assert.equal(timelineRest.subtitleCount, 0, 'no ARTWORK subtitle above title');
+  assert.equal(timelineRest.gradientBottom, '0px', 'independent gradient reaches the full bottom');
+  assert.match(timelineRest.gradientBackground, /linear-gradient/);
+  assert.equal(timelineRest.labelBackground, 'none', 'title does not contain a truncated gradient');
+  assert.equal(timelineRest.clipping, 'hidden', 'rounded thumbnail clips the full gradient');
+  assert.equal(timelineRest.inactiveOpacity, '1', 'inactive artwork remains fully opaque');
+  assert.match(timelineRest.counter, /\d+ \/ \d+/, 'collection counter is retained');
+  const reducedTimelineDuration = await evaluate(`(() => {
+    const root = document.documentElement;
+    const previous = root.dataset.motion;
+    root.dataset.motion = 'reduced';
+    const duration = parseFloat(getComputedStyle(document.querySelector('.timeline')).transitionDuration);
+    root.dataset.motion = previous;
+    return duration;
+  })()`);
+  assert.ok(reducedTimelineDuration < 0.001, 'explicit reduced-motion preference removes timeline fades');
+  await capture('timeline-after-desktop-clean.png');
+  await moveTimelinePointer(timelineRest.x, timelineRest.top - 20);
+  await waitFor("document.querySelector('.timeline').classList.contains('is-revealed')");
+  await settleTimeline();
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.timeline')).transitionDuration"),
+    '0.28s', 'desktop reveal uses 280ms opacity transition');
+  await capture('timeline-after-desktop-revealed.png');
+  await moveTimelinePointer(timelineRest.x, 899);
+  assert.equal(await evaluate("document.querySelector('.timeline').classList.contains('is-revealed')"),
+    true, 'proximity includes the resting bar bottom gap');
+  await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+  await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+  assert.equal(await evaluate("document.querySelector('#app').dataset.experience"), 'gallery',
+    'timeline Escape dismisses chrome rather than navigating back to the hub');
+  await moveTimelinePointer(timelineRest.x + 1, 898);
+  assert.equal(await evaluate("document.querySelector('.timeline').classList.contains('is-revealed')"),
+    false, 'Escape prevents immediate proximity re-reveal');
+  await moveTimelinePointer(720, 400);
+  await moveTimelinePointer(timelineRest.x, timelineRest.top - 20);
+  assert.equal(await evaluate("document.querySelector('.timeline').classList.contains('is-revealed')"),
+    true, 'leaving and reentering the zone clears Escape suppression');
+  await moveTimelinePointer(720, 400);
+  await waitFor("!document.querySelector('.timeline').classList.contains('is-revealed')");
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 720, y: 400, button: 'left', buttons: 1, clickCount: 1 });
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: timelineRest.x, y: timelineRest.top - 20, buttons: 1 });
+  await waitForFrames(2);
+  assert.equal(await evaluate("document.querySelector('.timeline').classList.contains('is-revealed')"),
+    false, 'artwork drag into the bar proximity does not reveal');
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: timelineRest.x, y: timelineRest.top - 20, button: 'left', buttons: 0, clickCount: 1 });
+  await moveTimelinePointer(720, 400);
+  await evaluate("document.querySelector('.timeline-cue').click()");
+  assert.equal(await evaluate("document.querySelector('.timeline').contains(document.activeElement)"),
+    true, 'cue activation transfers keyboard focus to the current artwork');
+  await moveTimelinePointer(720, 400);
+  assert.equal(await evaluate("document.querySelector('.timeline').classList.contains('is-revealed')"),
+    true, 'keyboard focus holds timeline open outside pointer zone');
+  await evaluate("document.querySelector('.gallery-canvas').focus()");
+  await waitFor("!document.querySelector('.timeline').classList.contains('is-revealed')");
+  await evaluate("window.__timelineRestingNextSibling = document.querySelector('.timeline-cue').nextSibling");
+  console.log('✓ desktop timeline measured proximity, title-only gradient, static cue, Escape, drag and keyboard persistence');
   await evaluate("document.querySelector('.topbar__room-view-btn').click()");
   await waitFor("!document.querySelector('.gallery-room-view').hidden", 5000);
+  assert.equal(await evaluate("document.querySelector('.gallery-room-view__timeline-host .timeline-cue') === document.querySelector('.timeline-cue')"),
+    true, 'the single accessible timeline cue moves into the photo room with the single timeline');
+  await moveTimelinePointer(720, 400);
+  await waitForCameraSettled();
+  await waitFor("!document.querySelector('.timeline').classList.contains('is-revealed')");
+  await settleTimeline();
+  await capture('timeline-after-room-clean.png');
+  const restingRoomCamera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
+  const roomTimelineTop = await evaluate("document.querySelector('.timeline').getBoundingClientRect().top");
+  await moveTimelinePointer(720, roomTimelineTop - 20);
+  await waitFor("document.querySelector('.timeline').classList.contains('is-revealed')");
+  await settleTimeline();
+  assert.equal(await evaluate("document.querySelector('.gallery-room-view__scene').style.transform"),
+    restingRoomCamera, 'timeline hover does not refit or move the photo-room camera');
+  await capture('timeline-after-room-revealed.png');
+  await moveTimelinePointer(720, 400);
   const activeRoomEntry = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
     const label = [...button.querySelectorAll('span')].find((span) => getComputedStyle(span).display !== 'none')?.textContent.trim();
@@ -1893,6 +2027,10 @@ try {
     true,
     'closing the room view restores the same selected timeline to its gallery parent'
   );
+  assert.equal(await evaluate("document.querySelector('#app > .timeline-cue') === document.querySelector('.timeline-cue')"),
+    true, 'closing the photo room restores the single accessible timeline cue');
+  assert.equal(await evaluate("document.querySelector('.timeline-cue').nextSibling === window.__timelineRestingNextSibling"),
+    true, 'timeline and cue return to their original position among gallery controls');
   assert.equal(
     await evaluate(`(() => {
       // v1.42: on touch phones the shared controls return to the topbar "more" menu.
@@ -1934,6 +2072,8 @@ try {
     'auto',
     'the gallery overview does not show a grab cursor when panning is unavailable'
   );
+  // Let the render loop establish the post-resize overview readout baseline.
+  await waitForFrames(4);
   await evaluate(`(() => {
     const zoomIn = document.querySelector('.zoom-controls [aria-label="Vergrößern"]');
     for (let step = 0; step < 14; step += 1) zoomIn.click();

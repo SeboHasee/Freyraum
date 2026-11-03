@@ -1,6 +1,16 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
+## Unreleased — timeline refinement (2026-11-03)
+
+- The mouse timeline reveals near its bottom-edge area and fades away after
+  departure, with an accessible **Werke** control and focus persistence.
+  The existing always-visible setting and touch-phone gestures are preserved.
+- Timeline thumbnails show only artwork titles, with continuous bottom shading
+  instead of a label background ending above the image edge. Shadows, selection
+  emphasis and the collection counter are quieter; inactive previews retain
+  their colour.
+
 ## Unreleased — v1.46 next development round (2026-10-22)
 
 - **Merge readiness (docs):** every Markdown file re-audited against the

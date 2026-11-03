@@ -6,6 +6,15 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Timeline refinement acceptance (2026-11-03)
+
+- [ ] Customer review of mouse reveal/fade feel, title-only thumbnails and
+      continuous shading against the supplied screenshot.
+- [ ] Real-device confirmation of keyboard access, always-visible controls,
+      touch-phone portrait/landscape and shared photo-room navigation.
+- [ ] Post-deployment verification; generated-preview checks are not live-site
+      acceptance.
+
 ## Next development round (v1.46, 2026-10-22) — ready to merge
 
 Delivered on PR #27 (details: `CHANGELOG.md` v1.46, numbers: `FINDINGS.md`):

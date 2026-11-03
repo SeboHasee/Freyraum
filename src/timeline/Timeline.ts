@@ -113,7 +113,7 @@ export class Timeline {
     const thumb = document.createElement('button');
     thumb.type = 'button';
     thumb.className = 'timeline__thumb';
-    thumb.setAttribute('aria-label', `${artwork.subtitle}: ${artwork.title}`);
+    thumb.setAttribute('aria-label', artwork.title);
     thumb.setAttribute('aria-pressed', index === this.currentIndex ? 'true' : 'false');
     thumb.setAttribute('aria-current', index === this.currentIndex ? 'true' : 'false');
     thumb.setAttribute('data-index', String(index));
@@ -143,11 +143,7 @@ export class Timeline {
     label.className = 'timeline__thumb-label';
     label.textContent = artwork.title;
     label.title = artwork.title;
-    const subtitle = document.createElement('span');
-    subtitle.className = 'timeline__thumb-subtitle';
-    subtitle.textContent = artwork.subtitle;
-
-    thumb.append(frame, subtitle, label);
+    thumb.append(frame, label);
     thumb.addEventListener('click', () => this.select(index));
     thumb.addEventListener('pointerenter', () => this.preview(index));
     thumb.addEventListener('focus', () => this.preview(index));

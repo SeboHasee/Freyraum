@@ -5,7 +5,7 @@ import type { NavigationControls } from './NavigationControls';
 /**
  * Clean Chrome: auto-hide the artwork information and navigation controls.
  *
- * The timeline remains fixed and visible. This manager centralises reveal/hide
+ * The timeline auto-hides only with a fine, hovering mouse. This manager centralises reveal/hide
  * logic for the left info panel and navigation controls. Panels reveal on
  * pointer proximity to the relevant screen edge, on keyboard focus, or on an
  * explicit touch tap, and hide again after a dwell delay. The design satisfies
@@ -14,7 +14,7 @@ import type { NavigationControls } from './NavigationControls';
  * moving the pointer (dismissible), and content persists until the pointer and
  * focus leave both the trigger zone and the panel (persistent).
  *
- * All listeners are passive so the handler can never block scrolling. The
+ * Pointer listeners are passive so the handler never blocks scrolling. The
  * `alwaysShowChrome` preference disables auto-hide entirely.
  */
 
@@ -32,6 +32,8 @@ export const CHROME_CONFIG = {
 
   /** ms after nav leaves trigger zone before hiding (slightly faster than panels) */
   NAV_HIDE_DELAY_MS: 2000,
+  TIMELINE_HIDE_DELAY_MS: 1000,
+  TIMELINE_PROXIMITY_MARGIN_PX: 32,
 
   /** ms a touch-revealed panel stays visible before auto-hiding */
   TOUCH_REVEAL_DURATION_MS: 4000,
@@ -48,7 +50,7 @@ export const CHROME_CONFIG = {
 } as const;
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
-export type PanelId = 'info-panel' | 'nav-controls';
+export type PanelId = 'info-panel' | 'nav-controls' | 'timeline';
 export type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced' | 'preference' | 'hint' | 'keyboard';
 export type ChromeMode = 'clean' | 'visible';
 
@@ -103,6 +105,18 @@ export class ChromeVisibilityManager {
   private readonly boundOnViewportLeave: () => void;
   private unsubscribePrefs: (() => void) | null = null;
   private initialised = false;
+  private appliedMode: ChromeMode | null = null;
+  private readonly timelineMedia = window.matchMedia('(hover: hover) and (pointer: fine)');
+  private timelineCue: HTMLButtonElement | null = null;
+  private timelineObserver: ResizeObserver | null = null;
+  private timelineAvailable = false;
+  private timelineTop = Infinity;
+  private timelineLeft = 0;
+  private timelineRight = 0;
+  private timelineSuppressed = false;
+  private timelineDragging = false;
+  private timelineInteracting = false;
+  private timelineUsesMouse = true;
 
   // v0.63 — Post-hint affordance "settle" phase timer. Briefly elevates the
   // salience of the idle peek strips/chevrons after the nav onboarding hint
@@ -139,15 +153,19 @@ export class ChromeVisibilityManager {
     this.createPeekElements();
     this.createSrStatusElement();
 
-    // All global listeners are passive — they never call preventDefault().
+    // Pointer listeners never block scrolling; Escape can consume a dismissal.
     window.addEventListener('pointermove', this.boundOnPointerMove, { passive: true });
     window.addEventListener('pointerdown', this.boundOnPointerDown, { passive: true });
-    document.addEventListener('keydown', this.boundOnKeyDown, { passive: true });
+    document.addEventListener('keydown', this.boundOnKeyDown);
     // When the cursor leaves the viewport entirely (other window/monitor) the
     // pointermove stream stops, so clear both trigger zones explicitly to avoid
     // a panel staying revealed because its last sample was still in-zone.
     document.addEventListener('mouseleave', this.boundOnViewportLeave, { passive: true });
     window.addEventListener('blur', this.boundOnViewportLeave, { passive: true });
+    window.addEventListener('resize', this.refreshTimeline);
+    window.addEventListener('pointerup', this.onPointerEnd, { passive: true });
+    window.addEventListener('pointercancel', this.onPointerEnd, { passive: true });
+    this.timelineMedia.addEventListener('change', this.refreshTimeline);
 
     for (const state of this.panels.values()) {
       state.el.addEventListener('focusin', state.onFocusIn);
@@ -170,6 +188,14 @@ export class ChromeVisibilityManager {
     document.removeEventListener('keydown', this.boundOnKeyDown);
     document.removeEventListener('mouseleave', this.boundOnViewportLeave);
     window.removeEventListener('blur', this.boundOnViewportLeave);
+    window.removeEventListener('resize', this.refreshTimeline);
+    window.removeEventListener('pointerup', this.onPointerEnd);
+    window.removeEventListener('pointercancel', this.onPointerEnd);
+    this.timelineMedia.removeEventListener('change', this.refreshTimeline);
+    this.timelineObserver?.disconnect();
+    this.panels.get('timeline')?.el.removeEventListener('scroll', this.onTimelineScroll, true);
+    this.timelineCue?.remove();
+    this.timelineCue = null;
     this.unsubscribePrefs?.();
     this.unsubscribePrefs = null;
 
@@ -236,6 +262,90 @@ export class ChromeVisibilityManager {
     if (this.currentMode() === 'visible') return;
     this.hide(panelId);
   }
+
+  registerTimeline(el: HTMLElement): HTMLButtonElement {
+    const state = this.createPanelState('timeline', el, 'Werke');
+    this.panels.set('timeline', state);
+    el.id = 'freyraum-timeline';
+    const cue = document.createElement('button');
+    cue.type = 'button';
+    cue.className = 'timeline-cue';
+    cue.textContent = 'Werke';
+    cue.setAttribute('aria-controls', el.id);
+    cue.setAttribute('aria-expanded', 'false');
+    cue.addEventListener('focus', () => {
+      if (!this.timelineSuppressed) this.reveal('timeline', 'focus');
+    });
+    cue.addEventListener('blur', () => {
+      if (this.shouldHide(state)) this.scheduleHide('timeline');
+    });
+    cue.addEventListener('click', () => {
+      this.timelineSuppressed = false;
+      this.reveal('timeline', 'keyboard');
+      el.querySelector<HTMLElement>('.timeline__thumb[tabindex="0"]')?.focus({ preventScroll: true });
+    });
+    el.after(cue);
+    this.timelineCue = cue;
+    el.addEventListener('focusin', state.onFocusIn);
+    el.addEventListener('focusout', state.onFocusOut);
+    el.addEventListener('pointerenter', state.onPointerEnter);
+    el.addEventListener('pointerleave', state.onPointerLeave);
+    el.addEventListener('scroll', this.onTimelineScroll, { passive: true, capture: true });
+    this.timelineObserver = new ResizeObserver(this.measureTimeline);
+    this.timelineObserver.observe(el);
+    this.refreshTimeline();
+    return cue;
+  }
+
+  setTimelineAvailable(available: boolean): void {
+    this.timelineAvailable = available;
+    this.refreshTimeline();
+  }
+
+  private measureTimeline = (): void => {
+    const el = this.panels.get('timeline')?.el;
+    if (!el || !this.timelineAvailable) return;
+    // Opacity-only hiding preserves this resting rect, including the bottom gap.
+    const rect = el.getBoundingClientRect();
+    this.timelineTop = rect.top - this.config.TIMELINE_PROXIMITY_MARGIN_PX;
+    this.timelineLeft = rect.left - this.config.TIMELINE_PROXIMITY_MARGIN_PX;
+    this.timelineRight = rect.right + this.config.TIMELINE_PROXIMITY_MARGIN_PX;
+  };
+
+  private refreshTimeline = (): void => {
+    const state = this.panels.get('timeline');
+    if (!state) return;
+    this.timelineSuppressed = false;
+    this.timelineDragging = false;
+    this.timelineInteracting = false;
+    state.pointerInZone = false;
+    state.pointerInPanel = false;
+    state.focusActive = state.el.contains(document.activeElement);
+    const autoHide = this.timelineMedia.matches && this.timelineUsesMouse;
+    state.el.dataset['autoHide'] = String(autoHide);
+    state.el.hidden = !this.timelineAvailable;
+    if (this.timelineCue) this.timelineCue.hidden = !this.timelineAvailable || !autoHide;
+    this.hide('timeline');
+    if (this.timelineAvailable) {
+      this.measureTimeline();
+      if (this.currentMode() === 'visible' || !autoHide || state.focusActive) {
+        this.reveal('timeline', 'preference');
+      }
+    }
+  };
+
+  private onTimelineScroll = (): void => {
+    const state = this.panels.get('timeline');
+    if (!state?.revealed || this.timelineSuppressed) return;
+    this.scheduleHide('timeline');
+  };
+
+  private onPointerEnd = (): void => {
+    this.timelineDragging = false;
+    this.timelineInteracting = false;
+    const state = this.panels.get('timeline');
+    if (state?.revealed && this.shouldHide(state)) this.scheduleHide('timeline');
+  };
 
   /**
    * Register the navigation controls as a third managed chrome surface.
@@ -360,6 +470,8 @@ export class ChromeVisibilityManager {
   }
 
   private applyMode(mode: ChromeMode): void {
+    if (this.appliedMode === mode) return;
+    this.appliedMode = mode;
     document.documentElement.dataset['chromeMode'] = mode;
     if (mode === 'visible') {
       // Reveal all panels immediately and cancel any pending hide timers.
@@ -370,12 +482,14 @@ export class ChromeVisibilityManager {
       for (const state of this.panels.values()) {
         if (this.shouldHide(state)) this.hide(state.id);
       }
+      this.refreshTimeline();
     }
   }
 
   private reveal(panelId: PanelId, reason: RevealReason): void {
     const state = this.panels.get(panelId);
     if (!state) return;
+    if (panelId === 'timeline' && (!this.timelineAvailable || this.timelineSuppressed)) return;
     if (state.hideTimerId !== null) {
       clearTimeout(state.hideTimerId);
       state.hideTimerId = null;
@@ -385,6 +499,10 @@ export class ChromeVisibilityManager {
     state.el.classList.add('is-revealed');
     state.revealed = true;
     state.reason = reason;
+    if (panelId === 'timeline') {
+      this.timelineCue?.setAttribute('aria-expanded', 'true');
+      this.timelineCue?.classList.add('is-revealed');
+    }
 
     this.announceToScreenReader(state, true);
     this.options.onRevealChange?.(panelId, true, reason);
@@ -403,29 +521,51 @@ export class ChromeVisibilityManager {
     state.el.classList.remove('is-revealed');
     state.revealed = false;
     state.reason = null;
+    if (panelId === 'timeline') {
+      this.timelineCue?.setAttribute('aria-expanded', 'false');
+      this.timelineCue?.classList.remove('is-revealed');
+    }
 
     this.announceToScreenReader(state, false);
     this.options.onRevealChange?.(panelId, false, null);
     this.diag.debug('hide', 'Panel hidden', { panelId });
   }
 
-  private scheduleHide(panelId: PanelId, delayMs: number = this.config.HIDE_DELAY_MS): void {
+  private scheduleHide(panelId: PanelId, delayMs?: number): void {
     const state = this.panels.get(panelId);
     if (!state) return;
     if (state.hideTimerId !== null) clearTimeout(state.hideTimerId);
-    state.hideTimerId = setTimeout(() => this.hide(panelId), delayMs);
+    state.hideTimerId = setTimeout(() => {
+      state.hideTimerId = null;
+      if (!this.initialised || this.currentMode() !== 'clean' || !this.shouldHide(state)) return;
+      if (panelId === 'timeline' && (!this.timelineAvailable || state.el.dataset['autoHide'] !== 'true')) return;
+      this.hide(panelId);
+    }, delayMs ?? (panelId === 'timeline' ? this.config.TIMELINE_HIDE_DELAY_MS : this.config.HIDE_DELAY_MS));
   }
 
   private shouldHide(state: PanelState): boolean {
-    return !state.pointerInZone && !state.pointerInPanel && !state.focusActive && !state.pinned;
+    return !state.pointerInZone && !state.pointerInPanel && !state.focusActive && !state.pinned
+      && !(state.id === 'timeline' && (this.timelineInteracting || document.activeElement === this.timelineCue));
   }
 
   // ─── Private: Event Handlers ───────────────────────────────────────────────
 
   private onPointerMove(e: PointerEvent): void {
+    if (e.pointerType === 'mouse' && !this.timelineUsesMouse) {
+      this.timelineUsesMouse = true;
+      this.refreshTimeline();
+    }
     if (this.currentMode() === 'visible') return;
     // Mouse/pen hover drives proximity; touch is handled via onPointerDown taps.
     if (e.pointerType === 'touch') return;
+    if (e.pointerType === 'mouse' && this.timelineMedia.matches && this.timelineAvailable) {
+      const inZone = e.clientY >= this.timelineTop
+        && e.clientX >= this.timelineLeft && e.clientX <= this.timelineRight;
+      if (!inZone) this.timelineSuppressed = false;
+      if (!this.timelineDragging && !e.buttons && !this.timelineSuppressed) {
+        this.updateZone('timeline', inZone);
+      }
+    }
 
     const x = e.clientX;
     const y = e.clientY;
@@ -440,6 +580,13 @@ export class ChromeVisibilityManager {
   }
 
   private onPointerDown(e: PointerEvent): void {
+    if (e.pointerType === 'touch' && this.timelineUsesMouse) {
+      this.timelineUsesMouse = false;
+      this.refreshTimeline();
+    }
+    const timeline = this.panels.get('timeline');
+    this.timelineInteracting = !!timeline?.el.contains(e.target as Node);
+    this.timelineDragging = !this.timelineInteracting;
     if (e.pointerType === 'mouse') return; // mouse handled by pointermove
     if (this.currentMode() === 'visible') return;
 
@@ -452,11 +599,17 @@ export class ChromeVisibilityManager {
   }
 
   private onViewportLeave(): void {
+    this.timelineDragging = false;
+    this.timelineInteracting = false;
+    this.timelineSuppressed = false;
     if (this.currentMode() === 'visible') return;
     // Clear ALL registered trigger zones; iterating over the panels map means
     // nav controls are included without needing a hard-coded list.
     for (const id of this.panels.keys()) {
+      const state = this.panels.get(id)!;
+      state.pointerInPanel = false;
       this.updateZone(id, false);
+      if (this.shouldHide(state)) this.scheduleHide(id);
     }
   }
 
@@ -472,6 +625,18 @@ export class ChromeVisibilityManager {
     }
 
     if (e.key !== 'Escape') return;
+    if (e.defaultPrevented || document.querySelector(
+      '.gallery-room-view:not([hidden]), [role="dialog"]:not([hidden]), .prefs__panel:not([hidden]), .keyboard-help:not([hidden])'
+    )) return;
+
+    const timeline = this.panels.get('timeline');
+    if (timeline?.revealed && this.timelineMedia.matches) {
+      e.preventDefault();
+      this.timelineSuppressed = true;
+      if (timeline.el.contains(document.activeElement)) this.timelineCue?.focus({ preventScroll: true });
+      timeline.focusActive = false;
+      this.hide('timeline');
+    }
 
     let dismissed = false;
     for (const state of this.panels.values()) {
@@ -491,6 +656,7 @@ export class ChromeVisibilityManager {
   private onPanelFocusIn(panelId: PanelId): void {
     const state = this.panels.get(panelId);
     if (!state) return;
+    if (panelId === 'timeline') this.timelineSuppressed = false;
     state.focusActive = true;
     if (state.hideTimerId !== null) {
       clearTimeout(state.hideTimerId);
@@ -515,6 +681,7 @@ export class ChromeVisibilityManager {
   private onPanelPointerEnter(panelId: PanelId): void {
     const state = this.panels.get(panelId);
     if (!state) return;
+    if (panelId === 'timeline' && (this.timelineDragging || this.timelineSuppressed)) return;
     state.pointerInPanel = true;
     if (state.hideTimerId !== null) {
       clearTimeout(state.hideTimerId);

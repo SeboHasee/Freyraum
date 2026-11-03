@@ -8,6 +8,21 @@ diffs, structural invariants, and GC metrics to concrete tools.
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
 
+## Timeline reveal and label polish (added 2026-11-03)
+
+- `npm run test:chrome-visibility` (included in `npm test`) exercises timeline
+  reveal/hide state and lifecycle with deterministic DOM and timer fixtures.
+- `npm run test:gallery-room-view:browser` checks the generated preview's shared
+  timeline and room transitions; `npm run test:mobile-browser` protects phone
+  portrait/landscape controls and immersive gestures. Run browser suites alone
+  and sequentially, after `npm run build`.
+- Manually compare hidden/revealed/focused thumbnails against bright and dark
+  images, portrait/landscape aspect ratios, long titles, enlarged text, reduced
+  motion and high contrast. The title scrim must reach the rounded bottom edge
+  without a bare strip, and mouse fades must never reframe the artwork.
+- Screenshot matching, fade feel on a real GPU, real-device touch acceptance,
+  and post-deployment checks remain separate from fixture or headless passes.
+
 ## Download size and bundle budgets (added 2026-10-22, v1.46)
 
 - `npm run validate:deploy` (deploy workflow, before the build): fails when

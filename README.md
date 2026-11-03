@@ -157,7 +157,11 @@ customer visual acceptance.
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
-- The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
+- With a mouse, the timeline fades in near its bottom-edge area and fades out
+  after departure; **Werke** provides a keyboard-accessible reveal control.
+  Focus keeps it open, and **Bedienleiste immer einblenden** disables auto-hide.
+  Touch layouts retain their existing timeline and tap-to-hide phone controls.
+  Thumbnails show artwork titles only, over continuous bottom shading.
 - Artwork `Surface` metadata is optional free text and never changes material or
   render settings.
 - Artwork `Presentation` metadata is optional, validated, and affects only the

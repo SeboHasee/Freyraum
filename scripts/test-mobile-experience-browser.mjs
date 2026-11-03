@@ -214,6 +214,10 @@ try {
       // utilities sit in the phone menu, and the artwork keeps most of the height.
       await evaluate("document.querySelector('.museum-hub:not([hidden]) .museum-hub__artwork:not([disabled])').click()");
       await waitFor("!!document.querySelector('.timeline') && document.querySelector('.museum-hub')?.hidden !== false", 90_000);
+      assert.equal(await evaluate("document.querySelector('.timeline').dataset.autoHide"), 'false',
+        `${viewport.name}: touch timeline does not gain desktop auto-hide`);
+      assert.equal(await evaluate("document.querySelector('.timeline-cue').hidden"), true,
+        `${viewport.name}: desktop Werke cue stays absent on touch`);
       await delay(2_500);
       await capture(`${viewport.name}-gallery.png`);
       const rail = await evaluate(`(() => {
@@ -327,6 +331,10 @@ try {
     await delay(400);
     if (await evaluate("!!document.querySelector('.museum-hub:not([hidden])')")) await tap(centered.x, centered.y);
     await waitFor("!!document.querySelector('.timeline') && document.querySelector('.museum-hub')?.hidden !== false", 90_000);
+    assert.equal(await evaluate("document.querySelector('.timeline').dataset.autoHide"), 'false',
+      `${viewport.name}: portrait touch timeline remains persistent`);
+    assert.equal(await evaluate("document.querySelector('.timeline-cue').hidden"), true,
+      `${viewport.name}: portrait touch has no desktop cue`);
     await delay(2_500);
     await capture(`${viewport.name}-gallery.png`);
     const chrome = await evaluate(`(() => {

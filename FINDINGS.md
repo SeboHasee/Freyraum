@@ -1,6 +1,22 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
+## 2026-11-03 — timeline obstruction and label shading
+
+- The customer screenshot shows a separate generic artwork subtitle and a dark
+  label background ending above the thumbnail bottom. The existing source
+  independently confirms a subtitle element and a title gradient with a 7 px
+  bottom offset. The screenshot's exact generated bundle is unknown; this is
+  source-supported diagnosis, not proof of its build identity.
+- Timeline opacity must not drive artwork viewport measurements or refitting:
+  fading navigation should not make the artwork grow and shrink. Phone immersive
+  mode remains the separate, deliberate action that frees framing space.
+- The photo room reparents the authoritative timeline. Its reveal control and
+  visibility lifecycle must follow that same surface, not duplicate navigation.
+- A timeline Escape dismissal must consume the key before the window-level
+  gallery shortcut sees it; otherwise dismissing chrome also returns to the
+  museum and loses restored focus. Dialogs and the photo room retain priority.
+
 ## 2026-10-22 — v1.46 download size and phone feel
 
 - **Gallery reset drift (D5) had the v1.44 room cause.** `GalleryManager`
