@@ -15,6 +15,10 @@
   sheet drag landed on peek. Slowing the drag did not resolve it, so the input
   cadence was restored rather than retaining an unsupported fix. The assertion
   now includes expanded/collapsed geometry and content height for diagnosis.
+  That report showed full height 263 px, already below the 270 px half-height
+  cap: both stops coincided for the short description. The three-stop browser
+  check now uses a long-description fixture, asserts distinct heights and
+  restores customer text afterward; product gesture rules remain unchanged.
 - Escape suppression must be cleared before applying the always-visible
   preference; otherwise `reveal()` refuses to restore the dismissed timeline.
   A deterministic regression reproduced the failure before the fix.

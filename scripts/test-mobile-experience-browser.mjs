@@ -503,6 +503,14 @@ try {
     })()`);
     await tap(infoButton.x, infoButton.y);
     await waitFor("document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    // Short descriptions make half and full the same height. Exercise three
+    // distinct stops with long content, then restore the customer's text.
+    const sheetDescription = await evaluate(`(() => {
+      const description = document.querySelector('.info-panel__description');
+      const original = description.textContent;
+      description.textContent = Array(12).fill(original).join(' ');
+      return original;
+    })()`);
     await settleAnimations('.info-panel');
     const handleAt = () => evaluate(`(() => {
       const rect = document.querySelector('.info-panel__handle').getBoundingClientRect();
@@ -556,6 +564,10 @@ try {
     );
     assert.equal(expandedSheet.ariaExpanded, 'true', `${viewport.name}: the handle reports the expanded state`);
     assert.ok(
+      expandedSheet.bottom - expandedSheet.top > viewport.height * 0.32 + 40,
+      `${viewport.name}: the long-content fixture separates full and half stops`
+    );
+    assert.ok(
       expandedSheet.top >= expandedSheet.topbarBottom && expandedSheet.bottom <= expandedSheet.timelineTop,
       `${viewport.name}: the expanded sheet sits between topbar and timeline (${JSON.stringify(expandedSheet)})`
     );
@@ -602,6 +614,7 @@ try {
     handle = await handleAt();
     await dragY(handle.x, handle.y, handle.y + 90);
     await waitFor("!document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    await evaluate(`document.querySelector('.info-panel__description').textContent = ${JSON.stringify(sheetDescription)}`);
     console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, then steps half → peek → away`);
 
     // v1.46 (C2): at the fitted zoom a horizontal swipe changes the photo room.

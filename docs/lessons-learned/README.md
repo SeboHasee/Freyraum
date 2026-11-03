@@ -3,9 +3,10 @@
 
 ## 2026-11-03 chrome visibility lesson
 
-See `../../LESSONS_LEARNED.md` Lessons 143–144 for preference-over-dismissal
+See `../../LESSONS_LEARNED.md` Lessons 143–145 for preference-over-dismissal
 priority, combined visibility-state regressions, reduced-motion CSS token
-overrides and waiting for debounced resize completion in browser checks.
+overrides, waiting for debounced resize completion and distinct-stop fixtures
+in browser checks.
 
 ## 2026-10-18 presentation-authority lessons
 

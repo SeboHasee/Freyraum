@@ -66,6 +66,9 @@ arrived (lesson 132). Since v1.46 the 390×844 pass checks the info-sheet stops
 `overscroll-behavior: contain`) and the photo-room swipe (next room, back, and
 spring-back at the first room). About 5–10 min headless; run
 it alone. Real-device feel is still manual.
+The three-stop sheet check uses long description text and restores the original
+afterward: short content can make half and full the same physical height.
+Failure reports include sheet geometry, not only the semantic stop.
 
 ## Mobile touch, gyro and hub panorama (added 2026-10-21)
 

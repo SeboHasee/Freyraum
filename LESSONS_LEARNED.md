@@ -3,6 +3,14 @@
 
 ## 2026-11-03 — Chrome visibility lessons
 
+### Lesson 145 — Give multi-stop layout tests distinct physical stops
+
+The phone check expected full → half, but a short description made both heights
+263 px (below the half-height cap). A 90 px pull correctly snapped toward peek;
+slowing the input did not fix the fixture. Use long content for the three-stop
+regression, assert separated heights and restore the original customer text.
+Include geometry in failures before changing gesture physics.
+
 ### Lesson 144 — Wait for debounced resize work before testing the next gesture
 
 The room/browser suite reached all new chrome checks but timed out on the later
